@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     rest_port: int = 8787
     mcp_port: int = 8788
+    bind_host: str = "0.0.0.0"
 
     # Comma-separated Host header values accepted by the MCP transport.
     # Set this to the public host, e.g. "health.example.com,health.example.com:443".

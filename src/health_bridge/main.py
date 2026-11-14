@@ -21,12 +21,12 @@ def build(service: HealthService | None = None):
     return settings, create_rest_app(service), create_mcp_app(service)
 
 
-async def _serve(rest_app, mcp_app, rest_port: int, mcp_port: int) -> None:
+async def _serve(rest_app, mcp_app, bind_host: str, rest_port: int, mcp_port: int) -> None:
     rest_server = uvicorn.Server(
-        uvicorn.Config(rest_app, host="127.0.0.1", port=rest_port, access_log=False, lifespan="on")
+        uvicorn.Config(rest_app, host=bind_host, port=rest_port, access_log=False, lifespan="on")
     )
     mcp_server = uvicorn.Server(
-        uvicorn.Config(mcp_app, host="127.0.0.1", port=mcp_port, access_log=False, lifespan="on")
+        uvicorn.Config(mcp_app, host=bind_host, port=mcp_port, access_log=False, lifespan="on")
     )
     # Only one server may own the process signal handlers.
     mcp_server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
@@ -49,8 +49,14 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     settings, rest_app, mcp_app = build()
-    logger.info("REST on 127.0.0.1:%s, MCP on 127.0.0.1:%s/mcp", settings.rest_port, settings.mcp_port)
-    asyncio.run(_serve(rest_app, mcp_app, settings.rest_port, settings.mcp_port))
+    logger.info(
+        "REST on %s:%s, MCP on %s:%s/mcp",
+        settings.bind_host,
+        settings.rest_port,
+        settings.bind_host,
+        settings.mcp_port,
+    )
+    asyncio.run(_serve(rest_app, mcp_app, settings.bind_host, settings.rest_port, settings.mcp_port))
 
 
 if __name__ == "__main__":

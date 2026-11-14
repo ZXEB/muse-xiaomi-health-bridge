@@ -90,8 +90,10 @@ class HealthService:
         states = self.db.sync_states()
         counts = self.db.counts()
         last_sync = max((s.get("last_synced_at") or "" for s in states.values()), default="")
+        error_text = " ".join((s.get("last_error") or "") for s in states.values()).lower()
         session_expired = any(
-            "session expired" in (s.get("last_error") or "") for s in states.values()
+            marker in error_text
+            for marker in ("no usable session", "session expired", "mifit login")
         )
         return {
             "ok": True,
