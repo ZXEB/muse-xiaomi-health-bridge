@@ -2,7 +2,31 @@ from __future__ import annotations
 
 from datetime import date
 
-from health_bridge.sync import iter_chunks, run_sync
+from health_bridge.sync import compute_next_run, iter_chunks, read_schedule, run_sync
+
+
+def test_read_schedule_defaults(service):
+    schedule = read_schedule(service.db, service.settings)
+    assert schedule == {"interval_minutes": 0, "hour": 4, "minute": 30, "days": 7}
+
+
+def test_compute_next_run_daily():
+    from datetime import datetime as dt
+
+    schedule = {"interval_minutes": 0, "hour": 4, "minute": 30, "days": 7}
+    now = dt(2026, 11, 14, 3, 0)
+    assert compute_next_run(schedule, now, None) == dt(2026, 11, 14, 4, 30)
+    later = dt(2026, 11, 14, 5, 0)
+    assert compute_next_run(schedule, later, None) == dt(2026, 11, 15, 4, 30)
+
+
+def test_compute_next_run_interval():
+    from datetime import datetime as dt, timedelta as td
+
+    schedule = {"interval_minutes": 30, "hour": 4, "minute": 30, "days": 7}
+    now = dt(2026, 11, 14, 8, 0)
+    last = dt(2026, 11, 14, 7, 50)
+    assert compute_next_run(schedule, now, last) == last + td(minutes=30)
 
 
 def test_iter_chunks_covers_range():

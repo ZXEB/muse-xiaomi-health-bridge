@@ -98,6 +98,8 @@ show me the results, set the connector to read-only, and save the integration as
 
 - 小米 session/passToken 只存在服务器卷 `mifit_session`，不要外传。
 - `BRIDGE_TOKEN` 只放 `.env`（0600），90 天轮换。
+- 管理密码：首次用 `.env` 的 `ADMIN_PASSWORD`；登录后可在「设置 → 修改管理密码」改（只存 PBKDF2 哈希到 SQLite）。忘记密码时执行
+  `docker compose run --rm bridge python -m health_bridge.admin --reset-password` 回退到 `.env` 的密码。
 - 服务只监听 `127.0.0.1`，由宿主机 Nginx 终止 TLS。
 - Muse 侧把连接器设为只读；工具返回的数据会进入 Meta 模型侧，只暴露摘要。
 

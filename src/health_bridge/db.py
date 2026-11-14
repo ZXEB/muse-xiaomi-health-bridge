@@ -112,6 +112,11 @@ CREATE TABLE IF NOT EXISTS admin_audit (
     detail TEXT,
     ip TEXT
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 
@@ -248,6 +253,23 @@ class Database:
                 "SELECT * FROM admin_audit ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_setting(self, key: str) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO app_settings(key, value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
+
+    def delete_setting(self, key: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
 
     def sync_states(self) -> dict[str, dict[str, Any]]:
         with self._connect() as conn:

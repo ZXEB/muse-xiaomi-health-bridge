@@ -12,6 +12,43 @@ from .source import DOMAINS, AuthExpiredError, MiFitnessSource
 log = logging.getLogger("health_bridge.sync")
 
 CHUNK_DAYS = 31
+DEFAULT_SYNC_DAYS = 7
+
+
+def read_schedule(db: Database, settings: Settings) -> dict:
+    """Effective auto-sync schedule: DB overrides survive restarts and UI edits."""
+
+    def _int(key: str, default: int) -> int:
+        raw = db.get_setting(key)
+        if raw is None:
+            return default
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "interval_minutes": max(0, _int("sync_interval_minutes", 0)),
+        "hour": min(23, max(0, _int("sync_hour", settings.sync_hour))),
+        "minute": min(59, max(0, _int("sync_minute", settings.sync_minute))),
+        "days": min(31, max(1, _int("sync_days", DEFAULT_SYNC_DAYS))),
+    }
+
+
+def compute_next_run(schedule: dict, now: datetime, last_run: datetime | None) -> datetime:
+    if schedule["interval_minutes"] > 0:
+        if last_run is None:
+            return now
+        return last_run + timedelta(minutes=schedule["interval_minutes"])
+    target = now.replace(hour=schedule["hour"], minute=schedule["minute"], second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return target
+
+
+def _record_run(db: Database, settings: Settings) -> None:
+    db.set_setting("last_auto_sync_at", datetime.now(settings.tzinfo).isoformat())
+
 
 
 def today_local(settings: Settings) -> date:
@@ -76,6 +113,7 @@ def run_sync(
 
 
 def daemon(settings: Settings, db: Database, source: MiFitnessSource) -> None:
+    schedule = read_schedule(db, settings)
     if db.latest_date() is None:
         log.info("no data yet; running initial backfill of %s days", settings.backfill_days)
         try:
@@ -83,32 +121,36 @@ def daemon(settings: Settings, db: Database, source: MiFitnessSource) -> None:
         except AuthExpiredError:
             log.error("mifit session expired; waiting for a fresh `mifit login`")
     else:
-        log.info("startup incremental sync (7 days)")
+        log.info("startup incremental sync (%s days)", schedule["days"])
         try:
-            run_sync(settings, db, source, 7)
+            run_sync(settings, db, source, schedule["days"])
         except AuthExpiredError:
             log.error("mifit session expired")
+    _record_run(db, settings)
 
+    logged_target: datetime | None = None
     while True:
+        schedule = read_schedule(db, settings)
         now = datetime.now(settings.tzinfo)
-        target = now.replace(
-            hour=settings.sync_hour,
-            minute=settings.sync_minute,
-            second=0,
-            microsecond=0,
-        )
-        if target <= now:
-            target += timedelta(days=1)
-        sleep_for = (target - now).total_seconds()
-        log.info("next sync at %s (%.0f s)", target.isoformat(timespec="minutes"), sleep_for)
-        time.sleep(sleep_for)
+        raw_last = db.get_setting("last_auto_sync_at")
+        last_run = datetime.fromisoformat(raw_last) if raw_last else None
+        target = compute_next_run(schedule, now, last_run)
+        if target != logged_target:
+            log.info("next automatic sync at %s", target.isoformat(timespec="minutes"))
+            logged_target = target
+        wait = (target - now).total_seconds()
+        if wait > 0:
+            # Wake at least every 30 s so schedule edits from the admin UI apply quickly.
+            time.sleep(min(wait, 30))
+            continue
         try:
-            result = run_sync(settings, db, source, 7)
+            result = run_sync(settings, db, source, schedule["days"])
             log.info("scheduled sync done: %s", result)
         except AuthExpiredError:
             log.error("mifit session expired; re-login required")
         except Exception:  # noqa: BLE001
             log.exception("scheduled sync failed")
+        _record_run(db, settings)
 
 
 def main(argv: list[str] | None = None) -> None:

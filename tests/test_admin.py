@@ -146,3 +146,86 @@ def test_backup_name_validation(rest_app):
     with TestClient(rest_app) as client:
         _login(client)
         assert client.get("/admin/api/backups/..%2F..%2Fetc%2Fpasswd").status_code in (400, 404)
+
+
+def test_password_change(rest_app):
+    with TestClient(rest_app) as client:
+        _login(client)
+        old_cookie = client.cookies.get("hb_admin")
+
+        bad = client.post(
+            "/admin/api/password", json={"current": "wrong", "new": "newpass123"}, headers=CSRF
+        )
+        assert bad.status_code == 401
+
+        short = client.post(
+            "/admin/api/password", json={"current": "admin-pass", "new": "short"}, headers=CSRF
+        )
+        assert short.status_code == 400
+
+        ok = client.post(
+            "/admin/api/password", json={"current": "admin-pass", "new": "newpass123"}, headers=CSRF
+        )
+        assert ok.status_code == 200
+        assert client.get("/admin/api/overview").status_code == 200
+
+        client.cookies.clear()
+        assert client.post("/admin/api/session", json={"password": "admin-pass"}).status_code == 401
+        assert client.post("/admin/api/session", json={"password": "newpass123"}).status_code == 200
+
+    stale = TestClient(rest_app)
+    stale.cookies.set("hb_admin", old_cookie, path="/admin")
+    assert stale.get("/admin/api/overview").status_code == 401
+
+
+def test_reset_password_cli(tmp_path, monkeypatch):
+    from health_bridge import admin
+    from health_bridge.db import Database
+
+    db_path = tmp_path / "health.db"
+    db = Database(db_path)
+    db.set_setting("admin_password_hash", "pbkdf2_sha256$1$abc$def")
+    db.set_setting("admin_session_epoch", "3")
+
+    monkeypatch.setenv("DB_PATH", str(db_path))
+    monkeypatch.setenv("BRIDGE_TOKEN", "x")
+
+    assert admin._main(["--reset-password"]) == 0
+    assert db.get_setting("admin_password_hash") is None
+    assert db.get_setting("admin_session_epoch") == "4"
+
+
+def test_schedule_defaults_and_update(rest_app):
+    with TestClient(rest_app) as client:
+        _login(client)
+        initial = client.get("/admin/api/schedule").json()
+        assert initial["mode"] == "daily"
+        assert initial["days"] == 7
+
+        bad = client.post("/admin/api/schedule", json={"mode": "interval", "interval_minutes": 2}, headers=CSRF)
+        assert bad.status_code == 400
+
+        updated = client.post(
+            "/admin/api/schedule",
+            json={"mode": "interval", "interval_minutes": 30, "days": 3, "hour": 6, "minute": 15},
+            headers=CSRF,
+        )
+        assert updated.status_code == 200
+        body = updated.json()
+        assert body["mode"] == "interval"
+        assert body["interval_minutes"] == 30
+        assert body["days"] == 3
+        assert body["next_run_at"]
+
+        fetched = client.get("/admin/api/schedule").json()
+        assert fetched["interval_minutes"] == 30
+        assert fetched["days"] == 3
+
+        back = client.post(
+            "/admin/api/schedule",
+            json={"mode": "daily", "hour": 5, "minute": 10, "days": 7},
+            headers=CSRF,
+        ).json()
+        assert back["mode"] == "daily"
+        assert back["interval_minutes"] == 0
+        assert back["hour"] == 5

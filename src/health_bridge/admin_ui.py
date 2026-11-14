@@ -169,7 +169,7 @@ ADMIN_HTML = r'''<!doctype html>
       <div><h1>小米健康桥</h1><p>Mi Fitness · Muse Data Bridge</p></div>
     </div>
     <h2>管理后台</h2>
-    <div class="hint">输入管理密码以继续。密码保存在服务器 <span class="mono">/opt/health-bridge/.env</span> 的 <span class="mono">ADMIN_PASSWORD</span>。</div>
+    <div class="hint">首次登录使用服务器 <span class="mono">/opt/health-bridge/.env</span> 里的 <span class="mono">ADMIN_PASSWORD</span>，登录后可在「设置」里修改。</div>
     <div class="field">
       <input id="password" class="input" type="password" placeholder="管理密码" autocomplete="current-password">
       <button id="btnLogin" class="btn">登录</button>
@@ -291,6 +291,33 @@ ADMIN_HTML = r'''<!doctype html>
         <div id="autoSyncInfo" class="muted" style="font-size:12px;margin-top:4px"></div>
       </div>
 
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><h3>自动同步设置</h3><span id="scheduleHint" class="muted" style="font-size:12px"></span></div>
+        <div class="toolbar" style="margin-bottom:0">
+          <select id="schedMode" class="input">
+            <option value="daily">每天定时</option>
+            <option value="interval">固定间隔</option>
+          </select>
+          <span id="schedDailyWrap" class="toolbar" style="margin:0;gap:6px">
+            <input id="schedHour" class="input" type="number" min="0" max="23" style="width:78px">
+            <span class="muted">:</span>
+            <input id="schedMinute" class="input" type="number" min="0" max="59" style="width:78px">
+          </span>
+          <span id="schedIntervalWrap" class="toolbar hidden" style="margin:0;gap:6px">
+            <input id="schedInterval" class="input" type="number" min="5" max="1440" step="5" style="width:100px">
+            <span class="muted">分钟一次</span>
+          </span>
+          <select id="schedDays" class="input">
+            <option value="3">每次回看 3 天</option>
+            <option value="7">每次回看 7 天</option>
+            <option value="14">每次回看 14 天</option>
+            <option value="30">每次回看 30 天</option>
+          </select>
+          <button id="btnSaveSchedule" class="btn">保存</button>
+        </div>
+        <div id="schedMsg" class="muted" style="font-size:12px;margin-top:9px"></div>
+      </div>
+
       <div class="card">
         <div class="card-head"><h3>各数据域状态</h3><span class="muted" style="font-size:12px">来自 sync_state</span></div>
         <div id="domainTable" class="table-wrap"></div>
@@ -371,6 +398,20 @@ ADMIN_HTML = r'''<!doctype html>
           </div>
           <p class="muted" style="font-size:12px;margin:10px 0 0">在 Meta Muse 里让连接器指向上面的 MCP 地址，凭据走 Muse 的安全输入框。</p>
         </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <h3>修改管理密码</h3>
+        <div class="grid cols-3" style="margin-bottom:12px">
+          <input id="pwCurrent" class="input" type="password" placeholder="当前密码" autocomplete="current-password">
+          <input id="pwNew" class="input" type="password" placeholder="新密码（至少 8 位）" autocomplete="new-password">
+          <input id="pwConfirm" class="input" type="password" placeholder="确认新密码" autocomplete="new-password">
+        </div>
+        <div class="toolbar" style="margin:0">
+          <button id="btnChangePw" class="btn">修改密码</button>
+          <span id="pwMsg" class="muted" style="font-size:12.5px"></span>
+        </div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">修改后其他浏览器会退出登录，当前页面自动续期。忘记密码时，在服务器执行 <code>docker compose run --rm bridge python -m health_bridge.admin --reset-password</code> 回退到 .env 的密码。</p>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -623,9 +664,15 @@ ADMIN_HTML = r'''<!doctype html>
     } else {
       resultEl.textContent = "";
     }
-    $("#autoSyncInfo").textContent = cfg.sync_hour != null
-      ? ("每天 " + String(cfg.sync_hour).padStart(2,"0") + ":" + String(cfg.sync_minute).padStart(2,"0") + " 自动增量同步（" + (cfg.timezone || "") + "），首次回填 " + (cfg.backfill_days || "") + " 天。")
-      : "";
+    $("#autoSyncInfo").textContent = (function(){
+      var sched = cfg.schedule;
+      if(!sched){ return ""; }
+      var when = sched.mode === "interval"
+        ? ("每 " + sched.interval_minutes + " 分钟")
+        : ("每天 " + String(sched.hour).padStart(2,"0") + ":" + String(sched.minute).padStart(2,"0"));
+      var next = sched.next_run_at ? ("，下次 " + new Date(sched.next_run_at).toLocaleString()) : "";
+      return when + " 自动同步（每次回看 " + sched.days + " 天）" + next;
+    })();
 
     var domains = (data.bridge && data.bridge.domains) || {};
     var names = Object.keys(domains).sort();
@@ -756,6 +803,40 @@ ADMIN_HTML = r'''<!doctype html>
   };
 
   /* ---------------- sync ---------------- */
+  async function loadSchedule(){
+    try{
+      var s = await api("/schedule");
+      $("#schedMode").value = s.mode;
+      $("#schedInterval").value = s.interval_minutes || 30;
+      $("#schedHour").value = s.hour;
+      $("#schedMinute").value = s.minute;
+      $("#schedDays").value = String(s.days);
+      $("#scheduleHint").textContent = (s.last_run_at ? ("上次自动同步 " + rel(s.last_run_at)) : "尚未自动同步")
+        + (s.next_run_at ? (" · 下次 " + new Date(s.next_run_at).toLocaleString()) : "");
+      $("#schedMsg").textContent = "";
+      toggleSchedule();
+    } catch(e){ toast(e.message, "bad"); }
+  }
+  function toggleSchedule(){
+    var interval = $("#schedMode").value === "interval";
+    $("#schedDailyWrap").classList.toggle("hidden", interval);
+    $("#schedIntervalWrap").classList.toggle("hidden", !interval);
+  }
+  async function saveSchedule(){
+    var body = {
+      mode: $("#schedMode").value,
+      days: Number($("#schedDays").value),
+      hour: Number($("#schedHour").value),
+      minute: Number($("#schedMinute").value),
+      interval_minutes: Number($("#schedInterval").value)
+    };
+    try{
+      var s = await api("/schedule", {method:"POST", body:body});
+      $("#schedMsg").textContent = "已保存，下次自动同步 " + new Date(s.next_run_at).toLocaleString();
+      toast("自动同步设置已更新", "ok");
+      loadOverview(true); loadSchedule();
+    } catch(e){ $("#schedMsg").textContent = e.message; }
+  }
   async function startSync(days){
     if(days >= 90){ var ok = await confirmBox("开始同步", "将回填最近 " + days + " 天的数据，可能需要几分钟，期间请勿重复触发。", "开始"); if(!ok){ return; } }
     try{ await api("/sync?days=" + days, {method:"POST", body:{}}); toast("同步已开始", "ok"); loadOverview(); }
@@ -814,8 +895,10 @@ ADMIN_HTML = r'''<!doctype html>
     try{
       var s = await api("/settings");
       var kv = [
-        ["版本", s.version], ["时区", s.timezone], ["自动同步", String(s.sync_hour).padStart(2,"0") + ":" + String(s.sync_minute).padStart(2,"0")],
+        ["版本", s.version], ["时区", s.timezone],
+        ["自动同步", s.schedule ? (s.schedule.mode === "interval" ? ("每 " + s.schedule.interval_minutes + " 分钟") : (String(s.schedule.hour).padStart(2,"0") + ":" + String(s.schedule.minute).padStart(2,"0"))) : "—"],
         ["回填天数", s.backfill_days],
+        ["密码来源", s.password_source === "database" ? "后台修改" : ".env"],
         ["REST 限流", s.rate_limit_per_min + " 次/分钟"], ["同步限流", s.sync_rate_limit_per_min + " 次/分钟"],
         ["允许的 Host", (s.allowed_hosts || []).join(", ")],
         ["数据库", s.db_path + "（" + Math.max(1, Math.round(s.db_size/1024)) + " KB）"],
@@ -839,6 +922,21 @@ ADMIN_HTML = r'''<!doctype html>
       "Connect with the official MCP SDK, call get_daily_summary for the last 7 days end to end,\n" +
       "show me the results, set the connector to read-only, and save the integration as a reusable skill.";
   }
+  async function changePassword(){
+    var current = $("#pwCurrent").value, next = $("#pwNew").value, again = $("#pwConfirm").value;
+    var msg = $("#pwMsg");
+    msg.textContent = "";
+    if(next.length < 8){ msg.textContent = "新密码至少需要 8 个字符"; return; }
+    if(next !== again){ msg.textContent = "两次输入的新密码不一致"; return; }
+    try{
+      await api("/password", {method:"POST", body:{current:current, new:next}});
+      $("#pwCurrent").value = ""; $("#pwNew").value = ""; $("#pwConfirm").value = "";
+      msg.textContent = "已修改；其他浏览器会话已失效，当前页面自动续期。";
+      toast("管理密码已更新", "ok");
+      loadSettings();
+    } catch(e){ msg.textContent = e.message; }
+  }
+
   async function revealToken(){
     if(state.token){ $("#tokenInput").value = "••••••••••••••••"; state.token = ""; $("#btnReveal").textContent = "显示"; return; }
     try{ var r = await api("/token"); state.token = r.token; $("#tokenInput").value = r.token; $("#btnReveal").textContent = "隐藏"; }
@@ -870,6 +968,7 @@ ADMIN_HTML = r'''<!doctype html>
     if(page === "data"){ initDataPage(); }
     if(page === "backups"){ loadBackups(); }
     if(page === "settings"){ loadSettings(); }
+    if(page === "sync"){ loadSchedule(); }
     if(page === "sync" || page === "xiaomi" || page === "overview"){ loadOverview(); }
   }
 
@@ -885,12 +984,15 @@ ADMIN_HTML = r'''<!doctype html>
       window.location = "/admin/api/export.csv?domain=" + encodeURIComponent(domain) + "&start=" + from + "&end=" + to;
     };
     $$("#syncSeg button").forEach(function(b){ b.onclick = function(){ startSync(Number(b.dataset.days)); }; });
+    $("#schedMode").onchange = toggleSchedule;
+    $("#btnSaveSchedule").onclick = saveSchedule;
     $$("#dataRangeSeg button").forEach(function(b){ b.onclick = function(){ setDataRange(Number(b.dataset.range)); }; });
     $("#btnXiaomiLogin").onclick = startXiaomiLogin;
     $("#btnXiaomiReset").onclick = resetXiaomiLogin;
     $("#btnBackup").onclick = createBackup;
     $("#btnBackupRefresh").onclick = loadBackups;
     $("#btnReveal").onclick = revealToken;
+    $("#btnChangePw").onclick = changePassword;
     $("#btnCopyPrompt").onclick = function(){ copyText(state.prompt, "提示词已复制"); };
     $("#btnAuditRefresh").onclick = loadAudit;
     $$("[data-copy]").forEach(function(b){

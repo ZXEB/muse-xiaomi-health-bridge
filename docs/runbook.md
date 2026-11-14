@@ -12,6 +12,19 @@ docker compose run --rm -it bridge mifit login   # 重新扫码登录
 ./deploy/restore.sh <stamp>
 ```
 
+## 管理密码
+
+- 首次登录用 `.env` 的 `ADMIN_PASSWORD`。
+- 登录后在「设置 → 修改管理密码」修改（只存 PBKDF2 哈希到 SQLite）；修改后其他浏览器会话失效。
+- 忘记密码：`docker compose run --rm bridge python -m health_bridge.admin --reset-password`，之后用 `.env` 的密码登录。
+
+## 同步节奏
+
+- 默认每天 04:30（`Asia/Shanghai`）增量同步，回看 7 天。
+- 「同步」页可改为固定间隔（5–1440 分钟），并调整每次回看 3/7/14/30 天；保存后 30 秒内生效，无需重启。
+- 启动容器时也会同步一次；首次无数据会回填 `BACKFILL_DAYS` 天。
+- 小米云端本身有上传延迟，频繁抓取不会让数据更实时，反而增加风控风险。
+
 ## 健康检查
 
 ```bash

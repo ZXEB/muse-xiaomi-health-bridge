@@ -7,6 +7,7 @@ import hmac
 import io
 import json
 import re
+import secrets
 import sqlite3
 import tempfile
 import threading
@@ -23,7 +24,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from . import __version__
 from .admin_ui import ADMIN_HTML
 from .config import Settings
+from .db import Database
 from .service import DOMAIN_FIELDS, HealthService
+from .sync import compute_next_run, read_schedule
 
 COOKIE_NAME = "hb_admin"
 COOKIE_TTL_S = 12 * 3600
@@ -37,28 +40,73 @@ CSRF_HEADER = "x-requested-with"
 
 
 def _secret(settings: Settings) -> bytes:
-    material = f"{settings.admin_password}\0{settings.bridge_token}".encode()
-    return hashlib.sha256(material).digest()
+    # Stable cookie signing key, independent of the admin password, so a password
+    # change is handled by the session epoch instead of silently breaking cookies.
+    return hashlib.sha256(settings.bridge_token.encode() + b"\0hb-admin-cookie").digest()
 
 
-def _sign(settings: Settings, expires_at: int) -> str:
-    message = str(expires_at).encode()
+def _epoch(service: HealthService) -> str:
+    return service.db.get_setting("admin_session_epoch") or "0"
+
+
+def _sign(settings: Settings, expires_at: int, epoch: str) -> str:
+    message = f"{expires_at}:{epoch}".encode()
     signature = hmac.new(_secret(settings), message, hashlib.sha256).hexdigest()
-    return f"{expires_at}.{signature}"
+    return f"{expires_at}.{epoch}.{signature}"
 
 
-def _verify(settings: Settings, value: str | None) -> bool:
-    if not value or not settings.admin_password or "." not in value:
+def _verify(settings: Settings, service: HealthService, value: str | None) -> bool:
+    if not value or not _admin_enabled(service):
         return False
-    expires, signature = value.split(".", 1)
+    parts = value.split(".")
+    if len(parts) != 3:
+        return False
+    expires_s, epoch, signature = parts
     try:
-        expires_at = int(expires)
+        expires_at = int(expires_s)
     except ValueError:
         return False
     if expires_at < time.time():
         return False
-    expected = hmac.new(_secret(settings), expires.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(epoch, _epoch(service)):
+        return False
+    expected = hmac.new(_secret(settings), f"{expires_s}:{epoch}".encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def _admin_enabled(service: HealthService) -> bool:
+    return bool(service.db.get_setting("admin_password_hash") or service.settings.admin_password)
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    iterations = 210_000
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
+    return (
+        f"pbkdf2_sha256${iterations}$"
+        f"{base64.b64encode(salt).decode()}${base64.b64encode(digest).decode()}"
+    )
+
+
+def _check_password_hash(password: str, stored: str) -> bool:
+    try:
+        algorithm, iterations, salt_b64, digest_b64 = stored.split("$")
+        if algorithm != "pbkdf2_sha256":
+            return False
+        salt = base64.b64decode(salt_b64)
+        expected = base64.b64decode(digest_b64)
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, int(iterations))
+    except (ValueError, TypeError):
+        return False
+    return hmac.compare_digest(actual, expected)
+
+
+def _check_password(service: HealthService, password: str) -> bool:
+    stored = service.db.get_setting("admin_password_hash")
+    if stored:
+        return _check_password_hash(password, stored)
+    env_password = service.settings.admin_password
+    return bool(env_password) and hmac.compare_digest(password, env_password)
 
 
 def _client_ip(request: Request) -> str:
@@ -346,6 +394,44 @@ def _timeline(service: HealthService, days: int = 30) -> dict[str, Any]:
     }
 
 
+def _schedule_state(service: HealthService) -> dict[str, Any]:
+    schedule = read_schedule(service.db, service.settings)
+    now = datetime.now(service.settings.tzinfo)
+    last_raw = service.db.get_setting("last_auto_sync_at")
+    last_run = datetime.fromisoformat(last_raw) if last_raw else None
+    return {
+        **schedule,
+        "mode": "interval" if schedule["interval_minutes"] else "daily",
+        "last_run_at": last_raw,
+        "next_run_at": compute_next_run(schedule, now, last_run).isoformat(),
+    }
+
+
+def _parse_schedule(payload: dict[str, Any]) -> dict[str, int]:
+    mode = str(payload.get("mode", "daily"))
+    if mode not in ("daily", "interval"):
+        raise ValueError("mode must be daily or interval")
+    try:
+        interval = int(payload.get("interval_minutes", 0))
+        days = int(payload.get("days", 7))
+        hour = int(payload.get("hour", 4))
+        minute = int(payload.get("minute", 30))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("interval/hours/days must be integers") from exc
+    if mode == "interval":
+        if not 5 <= interval <= 1440:
+            raise ValueError("interval must be between 5 and 1440 minutes")
+    else:
+        interval = 0
+    if not 1 <= days <= 31:
+        raise ValueError("sync window must be between 1 and 31 days")
+    if not 0 <= hour <= 23:
+        raise ValueError("hour must be between 0 and 23")
+    if not 0 <= minute <= 59:
+        raise ValueError("minute must be between 0 and 59")
+    return {"interval": interval, "days": days, "hour": hour, "minute": minute}
+
+
 def _overview(service: HealthService, login_manager: XiaomiLoginManager, sync_manager: SyncManager, backups: BackupManager) -> dict[str, Any]:
     status = service.status()
     summary = service.summary(7)
@@ -373,8 +459,7 @@ def _overview(service: HealthService, login_manager: XiaomiLoginManager, sync_ma
         "backups": {"count": len(backups.list()), "total_size": backups.total_size()},
         "audit": service.db.list_audit(8),
         "config": {
-            "sync_hour": service.settings.sync_hour,
-            "sync_minute": service.settings.sync_minute,
+            "schedule": _schedule_state(service),
             "backfill_days": service.settings.backfill_days,
             "timezone": service.settings.tz,
         },
@@ -415,9 +500,9 @@ def create_admin_router(service: HealthService) -> APIRouter:
     attempts = LoginAttempts()
 
     def require(request: Request) -> None:
-        if not settings.admin_password:
+        if not _admin_enabled(service):
             raise HTTPException(status_code=503, detail="ADMIN_PASSWORD is not configured")
-        if not _verify(settings, request.cookies.get(COOKIE_NAME)):
+        if not _verify(settings, service, request.cookies.get(COOKIE_NAME)):
             raise HTTPException(status_code=401, detail="not authenticated")
 
     def require_csrf(request: Request) -> None:
@@ -437,12 +522,12 @@ def create_admin_router(service: HealthService) -> APIRouter:
     @router.post("/api/session")
     @router.post("/api/login")
     def admin_login(request: Request, payload: dict):
-        if not settings.admin_password:
+        if not _admin_enabled(service):
             return JSONResponse({"error": "ADMIN_PASSWORD is not configured"}, status_code=503)
         if not attempts.allow(_client_ip(request)):
             return JSONResponse({"error": "too many attempts, slow down"}, status_code=429)
         password = str(payload.get("password", ""))
-        if not hmac.compare_digest(password, settings.admin_password):
+        if not _check_password(service, password):
             audit(request, "login.fail")
             return JSONResponse({"error": "wrong password"}, status_code=401)
         expires_at = int(time.time()) + COOKIE_TTL_S
@@ -450,7 +535,7 @@ def create_admin_router(service: HealthService) -> APIRouter:
         response = JSONResponse({"ok": True})
         response.set_cookie(
             COOKIE_NAME,
-            _sign(settings, expires_at),
+            _sign(settings, expires_at, _epoch(service)),
             max_age=COOKIE_TTL_S,
             httponly=True,
             samesite="lax",
@@ -470,7 +555,40 @@ def create_admin_router(service: HealthService) -> APIRouter:
 
     @router.get("/api/session")
     def session_state(request: Request):
-        return {"authenticated": _verify(settings, request.cookies.get(COOKIE_NAME))}
+        return {"authenticated": _verify(settings, service, request.cookies.get(COOKIE_NAME))}
+
+    @router.post("/api/password")
+    def change_password(request: Request, payload: dict):
+        require(request)
+        require_csrf(request)
+        if not attempts.allow("password:" + _client_ip(request)):
+            return JSONResponse({"error": "too many attempts, slow down"}, status_code=429)
+        current = str(payload.get("current", ""))
+        new_password = str(payload.get("new", ""))
+        if not _check_password(service, current):
+            audit(request, "password.change.fail")
+            return JSONResponse({"error": "当前密码不正确"}, status_code=401)
+        if len(new_password) < 8:
+            return JSONResponse({"error": "新密码至少需要 8 个字符"}, status_code=400)
+        if hmac.compare_digest(new_password, current):
+            return JSONResponse({"error": "新密码不能与当前密码相同"}, status_code=400)
+        service.db.set_setting("admin_password_hash", _hash_password(new_password))
+        epoch = str(int(_epoch(service)) + 1)
+        service.db.set_setting("admin_session_epoch", epoch)
+        audit(request, "password.change")
+        expires_at = int(time.time()) + COOKIE_TTL_S
+        secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+        response = JSONResponse({"ok": True})
+        response.set_cookie(
+            COOKIE_NAME,
+            _sign(settings, expires_at, epoch),
+            max_age=COOKIE_TTL_S,
+            httponly=True,
+            samesite="lax",
+            secure=secure,
+            path="/admin",
+        )
+        return response
 
     # -- overview ------------------------------------------------------
     @router.get("/api/overview")
@@ -555,6 +673,26 @@ def create_admin_router(service: HealthService) -> APIRouter:
         require(request)
         return sync_manager.state()
 
+    @router.get("/api/schedule")
+    def schedule_get(request: Request):
+        require(request)
+        return _schedule_state(service)
+
+    @router.post("/api/schedule")
+    def schedule_set(request: Request, payload: dict):
+        require(request)
+        require_csrf(request)
+        try:
+            parsed = _parse_schedule(payload)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        service.db.set_setting("sync_interval_minutes", str(parsed["interval"]))
+        service.db.set_setting("sync_hour", str(parsed["hour"]))
+        service.db.set_setting("sync_minute", str(parsed["minute"]))
+        service.db.set_setting("sync_days", str(parsed["days"]))
+        audit(request, "schedule.update", json.dumps(parsed))
+        return _schedule_state(service)
+
     # -- xiaomi login --------------------------------------------------
     @router.post("/api/xiaomi/login")
     def xiaomi_login_start(request: Request):
@@ -617,8 +755,7 @@ def create_admin_router(service: HealthService) -> APIRouter:
             "version": __version__,
             "timezone": settings.tz,
             "backfill_days": settings.backfill_days,
-            "sync_hour": settings.sync_hour,
-            "sync_minute": settings.sync_minute,
+            "schedule": _schedule_state(service),
             "rate_limit_per_min": settings.rate_limit_per_min,
             "sync_rate_limit_per_min": settings.sync_rate_limit_per_min,
             "allowed_hosts": settings.allowed_hosts,
@@ -628,6 +765,7 @@ def create_admin_router(service: HealthService) -> APIRouter:
             "session_present": (Path.home() / ".mifit" / "session.json").exists(),
             "backup_dir": str(backups.dir),
             "max_rows": settings.max_rows,
+            "password_source": "database" if service.db.get_setting("admin_password_hash") else "env",
         }
 
     @router.get("/api/audit")
@@ -641,3 +779,28 @@ def create_admin_router(service: HealthService) -> APIRouter:
         return {"ok": True}
 
     return router
+
+
+def _main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Health bridge admin helpers")
+    parser.add_argument(
+        "--reset-password",
+        action="store_true",
+        help="forget the password stored by the web UI so ADMIN_PASSWORD from the environment applies again",
+    )
+    args = parser.parse_args(argv)
+    if not args.reset_password:
+        parser.print_help()
+        return 1
+    settings = Settings()
+    db = Database(settings.db_path)
+    db.delete_setting("admin_password_hash")
+    db.set_setting("admin_session_epoch", str(int(db.get_setting("admin_session_epoch") or "0") + 1))
+    print("Stored admin password cleared; ADMIN_PASSWORD from the environment now applies.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
