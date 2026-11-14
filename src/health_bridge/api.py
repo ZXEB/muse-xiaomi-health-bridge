@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 
 from . import __version__
 from .admin import create_admin_router
@@ -57,6 +57,24 @@ def create_rest_app(service: HealthService, token: str | None = None):
     @app.get("/healthz")
     def healthz():
         return {"ok": True}
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon():
+        return Response(
+            content=(
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+                '<rect width="48" height="48" rx="12" fill="#1b2740"/>'
+                '<path d="M14 30V20l6 6 4-9 4 9 6-6v10" fill="none" stroke="#4f8cff" '
+                'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+                '<circle cx="31" cy="17" r="2.4" fill="#34d399"/></svg>'
+            ),
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon_ico():
+        return RedirectResponse("/favicon.svg", status_code=307)
 
     @app.get("/v1/status")
     def status():

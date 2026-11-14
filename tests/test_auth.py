@@ -20,6 +20,16 @@ def test_openapi_is_public(rest_app):
     assert "/v1/summary" in response.json()["paths"]
 
 
+def test_favicon_is_public(rest_app):
+    with TestClient(rest_app) as client:
+        svg = client.get("/favicon.svg")
+        icon = client.get("/favicon.ico", follow_redirects=False)
+    assert svg.status_code == 200
+    assert "svg" in svg.headers["content-type"]
+    assert icon.status_code in (302, 307)
+    assert icon.headers["location"] == "/favicon.svg"
+
+
 def test_v1_requires_token(rest_app):
     with TestClient(rest_app) as client:
         response = client.get("/v1/status")

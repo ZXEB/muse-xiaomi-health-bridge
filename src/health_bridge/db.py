@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS sync_state (
     last_date TEXT,
     last_error TEXT
 );
+
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    action TEXT NOT NULL,
+    detail TEXT,
+    ip TEXT
+);
 """
 
 
@@ -216,6 +224,30 @@ class Database:
         with self._connect() as conn:
             row = conn.execute("SELECT MAX(date) AS d FROM daily_metrics").fetchone()
         return row["d"] if row and row["d"] else None
+
+    def earliest_date(self) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT MIN(date) AS d FROM daily_metrics").fetchone()
+        return row["d"] if row and row["d"] else None
+
+    def add_audit(self, action: str, detail: str = "", ip: str = "") -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO admin_audit(at, action, detail, ip) VALUES(?,?,?,?)",
+                (now, action[:80], detail[:500], ip[:64]),
+            )
+            conn.execute(
+                "DELETE FROM admin_audit WHERE id NOT IN "
+                "(SELECT id FROM admin_audit ORDER BY id DESC LIMIT 500)"
+            )
+
+    def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM admin_audit ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
     def sync_states(self) -> dict[str, dict[str, Any]]:
         with self._connect() as conn:

@@ -1,24 +1,39 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
 import hmac
 import io
+import json
+import re
+import sqlite3
+import tempfile
 import threading
 import time
+import zipfile
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
+from . import __version__
+from .admin_ui import ADMIN_HTML
 from .config import Settings
-from .service import HealthService
+from .service import DOMAIN_FIELDS, HealthService
 
 COOKIE_NAME = "hb_admin"
 COOKIE_TTL_S = 12 * 3600
 LOGIN_ATTEMPTS_PER_MIN = 8
+CSRF_HEADER = "x-requested-with"
+
+
+# ---------------------------------------------------------------------------
+# auth helpers
+# ---------------------------------------------------------------------------
 
 
 def _secret(settings: Settings) -> bytes:
@@ -44,6 +59,36 @@ def _verify(settings: Settings, value: str | None) -> bool:
         return False
     expected = hmac.new(_secret(settings), expires.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+class LoginAttempts:
+    def __init__(self, per_minute: int = LOGIN_ATTEMPTS_PER_MIN):
+        self.per_minute = per_minute
+        self._hits: dict[str, deque[float]] = {}
+        self._lock = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            hits = self._hits.setdefault(key, deque())
+            while hits and now - hits[0] > 60:
+                hits.popleft()
+            if len(hits) >= self.per_minute:
+                return False
+            hits.append(now)
+            return True
+
+
+# ---------------------------------------------------------------------------
+# QR login
+# ---------------------------------------------------------------------------
 
 
 def _qr_data_url(content: str) -> str:
@@ -92,6 +137,13 @@ class XiaomiLoginManager:
         with self._lock:
             return dict(self._state)
 
+    def reset(self) -> dict[str, Any]:
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                raise RuntimeError("a login attempt is still running; wait for it to finish")
+            self._state = {"state": "idle"}
+        return self.state()
+
     def _run(self) -> None:
         try:
             from mifit.auth.qr import login_qr
@@ -102,7 +154,11 @@ class XiaomiLoginManager:
 
             session = login_qr(on_qr=on_qr)
             save_session(session)
-            self._set(state="success", user_id=session.user_id, finished_at=datetime.now(timezone.utc).isoformat())
+            self._set(
+                state="success",
+                user_id=session.user_id,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
         except Exception as exc:  # noqa: BLE001 - report to the UI
             from mifit import NotificationRequiredError
 
@@ -116,9 +172,12 @@ class XiaomiLoginManager:
                 self._set(state="error", error=f"{type(exc).__name__}: {exc}")
 
 
-class SyncManager:
-    """Runs a sync in the background and reports its last result."""
+# ---------------------------------------------------------------------------
+# background sync
+# ---------------------------------------------------------------------------
 
+
+class SyncManager:
     def __init__(self, service: HealthService):
         self.service = service
         self._lock = threading.Lock()
@@ -148,44 +207,203 @@ class SyncManager:
     def _run(self, days: int) -> None:
         try:
             result = self.service.sync(days)
-            with self._lock:
-                self._state = {
-                    **self._state,
-                    "state": "done",
-                    "result": result,
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
-                }
+            state = {
+                **self._state,
+                "state": "done",
+                "result": result,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            }
         except Exception as exc:  # noqa: BLE001
-            with self._lock:
-                self._state = {
-                    **self._state,
-                    "state": "error",
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
-                }
-
-
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    return (forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown"))
-
-
-class LoginAttempts:
-    def __init__(self, per_minute: int = LOGIN_ATTEMPTS_PER_MIN):
-        self.per_minute = per_minute
-        self._hits: dict[str, deque[float]] = {}
-        self._lock = threading.Lock()
-
-    def allow(self, key: str) -> bool:
-        now = time.monotonic()
+            state = {
+                **self._state,
+                "state": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            }
         with self._lock:
-            hits = self._hits.setdefault(key, deque())
-            while hits and now - hits[0] > 60:
-                hits.popleft()
-            if len(hits) >= self.per_minute:
-                return False
-            hits.append(now)
-            return True
+            self._state = state
+
+
+# ---------------------------------------------------------------------------
+# backups
+# ---------------------------------------------------------------------------
+
+
+class BackupManager:
+    NAME_RE = re.compile(r"^health-backup-\d{8}-\d{6}\.zip$")
+
+    def __init__(self, db_path: str, session_dir: Path):
+        self.db_path = db_path
+        self.session_dir = session_dir
+        self.dir = Path(db_path).parent / "backups"
+
+    def list(self) -> list[dict[str, Any]]:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        entries = []
+        for path in sorted(self.dir.glob("*.zip"), reverse=True):
+            stat = path.stat()
+            entries.append(
+                {
+                    "name": path.name,
+                    "size": stat.st_size,
+                    "created_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                }
+            )
+        return entries
+
+    def total_size(self) -> int:
+        return sum(item["size"] for item in self.list())
+
+    def create(self) -> dict[str, Any]:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        name = f"health-backup-{stamp}.zip"
+        target = self.dir / name
+        tmp_db = Path(tempfile.mktemp(suffix=".db", dir=self.dir))
+        try:
+            source = sqlite3.connect(self.db_path, timeout=30)
+            try:
+                dest = sqlite3.connect(str(tmp_db))
+                try:
+                    source.backup(dest)
+                finally:
+                    dest.close()
+            finally:
+                source.close()
+
+            manifest = {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "version": __version__,
+                "session_included": self.session_dir.exists(),
+            }
+            with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.write(tmp_db, "health.db")
+                if self.session_dir.exists():
+                    for file in sorted(self.session_dir.rglob("*")):
+                        if file.is_file():
+                            archive.write(file, "mifit-session/" + str(file.relative_to(self.session_dir)))
+                archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+            target.chmod(0o600)
+        finally:
+            tmp_db.unlink(missing_ok=True)
+        return {"name": name, "size": target.stat().st_size}
+
+    def get(self, name: str) -> Path:
+        if not self.NAME_RE.match(name):
+            raise HTTPException(status_code=400, detail="invalid backup name")
+        path = self.dir / name
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="backup not found")
+        return path
+
+    def delete(self, name: str) -> None:
+        self.get(name).unlink()
+
+
+# ---------------------------------------------------------------------------
+# data helpers
+# ---------------------------------------------------------------------------
+
+
+def _timeline(service: HealthService, days: int = 30) -> dict[str, Any]:
+    days = max(7, min(days, 92))
+    end = service.today()
+    start = end - timedelta(days=days - 1)
+    rows = service.db.metrics_between(start.isoformat(), end.isoformat())
+    workouts = service.db.workouts_between(start.isoformat(), end.isoformat())
+    by_date = {row["date"]: row for row in rows}
+    workout_counts: dict[str, int] = {}
+    for workout in workouts:
+        day = workout.get("date") or ""
+        workout_counts[day] = workout_counts.get(day, 0) + 1
+
+    dates = [(start + timedelta(days=i)).isoformat() for i in range(days)]
+    keys = (
+        "steps",
+        "sleep_total_min",
+        "sleep_deep_min",
+        "sleep_light_min",
+        "sleep_rem_min",
+        "sleep_awake_min",
+        "hr_resting",
+        "hr_avg",
+        "spo2_avg",
+        "stress_avg",
+        "active_kcal",
+    )
+    series: dict[str, list[Any]] = {key: [] for key in keys}
+    for day in dates:
+        row = by_date.get(day, {})
+        for key in keys:
+            series[key].append(row.get(key))
+    return {
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "days": days,
+        "dates": dates,
+        "series": series,
+        "workouts": [workout_counts.get(day, 0) for day in dates],
+    }
+
+
+def _overview(service: HealthService, login_manager: XiaomiLoginManager, sync_manager: SyncManager, backups: BackupManager) -> dict[str, Any]:
+    status = service.status()
+    summary = service.summary(7)
+    timeline = _timeline(service, 30)
+    end = service.today()
+    recent = service.db.workouts_between((end - timedelta(days=365)).isoformat(), end.isoformat())
+    return {
+        "now": datetime.now(timezone.utc).isoformat(),
+        "timezone": service.settings.tz,
+        "version": __version__,
+        "bridge": status,
+        "session": {
+            "expired": status["session_expired"],
+            "last_sync_at": status["last_sync_at"],
+            "daily_rows": status["counts"]["daily_rows"],
+            "workout_rows": status["counts"]["workout_rows"],
+            "first_date": service.db.earliest_date(),
+            "last_date": status["latest_data_date"],
+        },
+        "summary": summary,
+        "timeline": timeline,
+        "recent_workouts": recent[-5:][::-1],
+        "login": login_manager.state(),
+        "sync": sync_manager.state(),
+        "backups": {"count": len(backups.list()), "total_size": backups.total_size()},
+        "audit": service.db.list_audit(8),
+        "config": {
+            "sync_hour": service.settings.sync_hour,
+            "sync_minute": service.settings.sync_minute,
+            "backfill_days": service.settings.backfill_days,
+            "timezone": service.settings.tz,
+        },
+    }
+
+
+def _csv_response(rows: list[dict[str, Any]], filename: str) -> Response:
+    buffer = io.StringIO()
+    if rows:
+        fields: list[str] = []
+        for row in rows:
+            for key in row:
+                if key not in fields:
+                    fields.append(key)
+        writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    else:
+        buffer.write("no data\n")
+    return Response(
+        content=buffer.getvalue().encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# router
+# ---------------------------------------------------------------------------
 
 
 def create_admin_router(service: HealthService) -> APIRouter:
@@ -193,6 +411,7 @@ def create_admin_router(service: HealthService) -> APIRouter:
     router = APIRouter(prefix="/admin", include_in_schema=False)
     login_manager = XiaomiLoginManager(settings)
     sync_manager = SyncManager(service)
+    backups = BackupManager(settings.db_path, Path.home() / ".mifit")
     attempts = LoginAttempts()
 
     def require(request: Request) -> None:
@@ -201,19 +420,30 @@ def create_admin_router(service: HealthService) -> APIRouter:
         if not _verify(settings, request.cookies.get(COOKIE_NAME)):
             raise HTTPException(status_code=401, detail="not authenticated")
 
+    def require_csrf(request: Request) -> None:
+        if request.headers.get(CSRF_HEADER, "").lower() != "xmlhttprequest":
+            raise HTTPException(status_code=403, detail="missing X-Requested-With header")
+
+    def audit(request: Request, action: str, detail: str = "") -> None:
+        service.db.add_audit(action, detail, _client_ip(request))
+
+    # -- pages ---------------------------------------------------------
     @router.get("", response_class=HTMLResponse)
     @router.get("/", response_class=HTMLResponse)
     def admin_page() -> HTMLResponse:
         return HTMLResponse(ADMIN_HTML)
 
+    # -- session -------------------------------------------------------
+    @router.post("/api/session")
     @router.post("/api/login")
     def admin_login(request: Request, payload: dict):
         if not settings.admin_password:
             return JSONResponse({"error": "ADMIN_PASSWORD is not configured"}, status_code=503)
         if not attempts.allow(_client_ip(request)):
-            return JSONResponse({"error": "too many attempts"}, status_code=429)
+            return JSONResponse({"error": "too many attempts, slow down"}, status_code=429)
         password = str(payload.get("password", ""))
         if not hmac.compare_digest(password, settings.admin_password):
+            audit(request, "login.fail")
             return JSONResponse({"error": "wrong password"}, status_code=401)
         expires_at = int(time.time()) + COOKIE_TTL_S
         secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
@@ -227,30 +457,110 @@ def create_admin_router(service: HealthService) -> APIRouter:
             secure=secure,
             path="/admin",
         )
+        audit(request, "login.ok")
         return response
 
+    @router.delete("/api/session")
     @router.post("/api/logout")
-    def admin_logout():
+    def admin_logout(request: Request):
+        audit(request, "logout")
         response = JSONResponse({"ok": True})
         response.delete_cookie(COOKIE_NAME, path="/admin")
         return response
 
-    @router.get("/api/status")
-    def admin_status(request: Request):
+    @router.get("/api/session")
+    def session_state(request: Request):
+        return {"authenticated": _verify(settings, request.cookies.get(COOKIE_NAME))}
+
+    # -- overview ------------------------------------------------------
+    @router.get("/api/overview")
+    def overview(request: Request):
         require(request)
-        status = service.status()
+        return _overview(service, login_manager, sync_manager, backups)
+
+    @router.get("/api/status")
+    def status_alias(request: Request):
+        require(request)
         summary = service.summary(7)
         return {
-            "bridge": status,
+            "bridge": service.status(),
             "login": login_manager.state(),
             "sync": sync_manager.state(),
             "overview": summary["overview"],
             "markdown": summary["markdown"],
         }
 
+    @router.get("/api/timeline")
+    def timeline(request: Request, days: int = 30):
+        require(request)
+        return _timeline(service, days)
+
+    @router.get("/api/summary")
+    def summary(request: Request, days: int = 7):
+        require(request)
+        return service.summary(days)
+
+    # -- data ----------------------------------------------------------
+    @router.get("/api/metrics")
+    def metrics(
+        request: Request,
+        domain: str = "all",
+        start: str | None = None,
+        end: str | None = None,
+    ):
+        require(request)
+        if domain == "all":
+            return service.metrics(start, end)
+        if domain == "workouts":
+            return service.workouts(start, end)
+        return service.domain(domain, start, end)
+
+    @router.get("/api/workouts")
+    def workouts(request: Request, start: str | None = None, end: str | None = None):
+        require(request)
+        return service.workouts(start, end)
+
+    @router.get("/api/export.csv")
+    def export_csv(
+        request: Request,
+        domain: str = "all",
+        start: str | None = None,
+        end: str | None = None,
+    ):
+        require(request)
+        if domain == "workouts":
+            payload = service.workouts(start, end)
+            rows = payload["rows"]
+        elif domain == "all":
+            payload = service.metrics(start, end)
+            rows = payload["rows"]
+        else:
+            payload = service.domain(domain, start, end)
+            rows = payload["rows"]
+        filename = f"health-{domain}-{payload['from']}-{payload['to']}.csv"
+        audit(request, "export.csv", f"{domain} {payload['from']}..{payload['to']}")
+        return _csv_response(rows, filename)
+
+    # -- sync ----------------------------------------------------------
+    @router.post("/api/sync")
+    def sync_start(request: Request, days: int = 7):
+        require(request)
+        require_csrf(request)
+        days = max(1, min(int(days), 366))
+        audit(request, "sync.start", f"{days} days")
+        return sync_manager.start(days)
+
+    @router.get("/api/sync")
+    def sync_state(request: Request):
+        require(request)
+        return sync_manager.state()
+
+    # -- xiaomi login --------------------------------------------------
     @router.post("/api/xiaomi/login")
     def xiaomi_login_start(request: Request):
         require(request)
+        require_csrf(request)
+        audit(request, "xiaomi.login.start")
         return login_manager.start()
 
     @router.get("/api/xiaomi/login")
@@ -258,15 +568,72 @@ def create_admin_router(service: HealthService) -> APIRouter:
         require(request)
         return login_manager.state()
 
-    @router.post("/api/sync")
-    def sync_start(request: Request, days: int = 7):
+    @router.delete("/api/xiaomi/login")
+    def xiaomi_login_reset(request: Request):
         require(request)
-        return sync_manager.start(max(1, min(int(days), 366)))
+        require_csrf(request)
+        return login_manager.reset()
 
+    # -- backups -------------------------------------------------------
+    @router.get("/api/backups")
+    def backup_list(request: Request):
+        require(request)
+        return {"backups": backups.list(), "total_size": backups.total_size()}
+
+    @router.post("/api/backups")
+    def backup_create(request: Request):
+        require(request)
+        require_csrf(request)
+        entry = backups.create()
+        audit(request, "backup.create", entry["name"])
+        return entry
+
+    @router.get("/api/backups/{name}")
+    def backup_download(request: Request, name: str):
+        require(request)
+        path = backups.get(name)
+        audit(request, "backup.download", name)
+        return FileResponse(path, media_type="application/zip", filename=name)
+
+    @router.delete("/api/backups/{name}")
+    def backup_delete(request: Request, name: str):
+        require(request)
+        require_csrf(request)
+        backups.delete(name)
+        audit(request, "backup.delete", name)
+        return {"ok": True}
+
+    # -- settings / token / audit -------------------------------------
     @router.get("/api/token")
     def bridge_token(request: Request):
         require(request)
         return {"token": settings.bridge_token, "mcp_url": "/mcp"}
+
+    @router.get("/api/settings")
+    def bridge_settings(request: Request):
+        require(request)
+        db_size = Path(settings.db_path).stat().st_size if Path(settings.db_path).exists() else 0
+        return {
+            "version": __version__,
+            "timezone": settings.tz,
+            "backfill_days": settings.backfill_days,
+            "sync_hour": settings.sync_hour,
+            "sync_minute": settings.sync_minute,
+            "rate_limit_per_min": settings.rate_limit_per_min,
+            "sync_rate_limit_per_min": settings.sync_rate_limit_per_min,
+            "allowed_hosts": settings.allowed_hosts,
+            "db_path": settings.db_path,
+            "db_size": db_size,
+            "session_dir": str(Path.home() / ".mifit"),
+            "session_present": (Path.home() / ".mifit" / "session.json").exists(),
+            "backup_dir": str(backups.dir),
+            "max_rows": settings.max_rows,
+        }
+
+    @router.get("/api/audit")
+    def audit_list(request: Request, limit: int = 50):
+        require(request)
+        return {"entries": service.db.list_audit(limit)}
 
     @router.get("/api/healthz")
     def admin_healthz(request: Request):
@@ -274,217 +641,3 @@ def create_admin_router(service: HealthService) -> APIRouter:
         return {"ok": True}
 
     return router
-
-
-ADMIN_HTML = """<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>小米运动健康 · Muse 数据桥</title>
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #0f1115; color: #e6e8ef; }
-  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .sub { color: #8b90a0; font-size: 13px; margin-bottom: 20px; }
-  .card { background: #171a21; border: 1px solid #262b36; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-  .k { color: #8b90a0; font-size: 12px; }
-  .v { font-size: 16px; margin-top: 2px; }
-  .ok { color: #4ade80; } .bad { color: #f87171; } .warn { color: #fbbf24; }
-  button { background: #2563eb; color: #fff; border: 0; border-radius: 9px; padding: 9px 14px; font-size: 14px; cursor: pointer; }
-  button.ghost { background: #232936; }
-  button:disabled { opacity: .5; cursor: default; }
-  input { background: #0f1115; border: 1px solid #2f3644; color: #e6e8ef; border-radius: 9px; padding: 10px 12px; font-size: 15px; width: 100%; }
-  pre { background: #0b0d12; border: 1px solid #262b36; border-radius: 10px; padding: 12px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
-  img.qr { width: 220px; height: 220px; background: #fff; padding: 8px; border-radius: 10px; }
-  .msg { font-size: 13px; margin-top: 8px; }
-  .hidden { display: none !important; }
-  a { color: #7aa2ff; }
-  code { background: #0b0d12; padding: 2px 6px; border-radius: 6px; font-size: 12px; word-break: break-all; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>小米运动健康 · Muse 数据桥</h1>
-  <div class="sub">只读数据通道 · 管理后台</div>
-
-  <section id="loginBox" class="card hidden">
-    <div class="k">管理密码</div>
-    <div class="row" style="margin-top:8px">
-      <input id="password" type="password" placeholder="ADMIN_PASSWORD" style="flex:1;min-width:200px">
-      <button id="btnLogin">进入</button>
-    </div>
-    <div id="loginMsg" class="msg bad"></div>
-  </section>
-
-  <section id="dash" class="hidden">
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div><div class="k">小米登录状态</div><div id="session" class="v">-</div></div>
-        <div><div class="k">最后同步</div><div id="lastSync" class="v">-</div></div>
-        <div><div class="k">数据天数</div><div id="counts" class="v">-</div></div>
-        <div><div class="k">最新数据</div><div id="latest" class="v">-</div></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div><div class="k">小米账号</div><div class="v">扫码登录 / 重新登录</div></div>
-        <button id="btnLoginXiaomi">获取二维码</button>
-      </div>
-      <div id="qrBox" class="hidden" style="margin-top:14px">
-        <div class="row" style="align-items:flex-start">
-          <img id="qrImg" class="qr" alt="QR">
-          <div style="flex:1;min-width:220px">
-            <div class="k">用「小米运动健康」App 扫码，或在手机浏览器打开下面的链接并登录小米账号确认。</div>
-            <div class="msg"><a id="qrLink" target="_blank" rel="noopener"></a></div>
-            <div id="qrState" class="msg warn"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="k">同步</div>
-      <div class="row" style="margin-top:8px">
-        <button class="ghost" data-days="7">同步最近 7 天</button>
-        <button class="ghost" data-days="30">同步最近 30 天</button>
-        <button class="ghost" data-days="365">回填 365 天</button>
-        <span id="syncState" class="msg"></span>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div class="k">最近 7 天摘要</div>
-        <button class="ghost" id="btnToken">显示 MCP Token</button>
-      </div>
-      <div id="tokenBox" class="msg hidden" style="margin-top:10px">
-        <div class="k">MCP 地址：<code id="mcpUrl">/mcp</code></div>
-        <div class="k" style="margin-top:6px">Bearer Token：<code id="tokenVal"></code></div>
-      </div>
-      <pre id="summary" style="margin-top:12px">加载中…</pre>
-    </div>
-
-    <div class="row" style="justify-content:flex-end">
-      <button class="ghost" id="btnLogout">退出登录</button>
-    </div>
-  </section>
-</div>
-
-<script>
-const $ = (id) => document.getElementById(id);
-const api = async (path, options = {}) => {
-  const res = await fetch('/admin/api' + path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.detail || body.error || ('HTTP ' + res.status));
-  return body;
-};
-let pollTimer = null;
-
-function showLogin() { $('loginBox').classList.remove('hidden'); $('dash').classList.add('hidden'); }
-function showDash() { $('loginBox').classList.add('hidden'); $('dash').classList.remove('hidden'); }
-
-async function login() {
-  $('loginMsg').textContent = '';
-  try {
-    await api('/login', { method: 'POST', body: JSON.stringify({ password: $('password').value }) });
-    showDash(); refresh(); poll();
-  } catch (e) { $('loginMsg').textContent = e.message; }
-}
-
-function fmtMinutes(m) {
-  if (m == null) return '-';
-  const t = Math.round(m);
-  return Math.floor(t / 60) + 'h' + String(t % 60).padStart(2, '0') + 'm';
-}
-
-function render(data) {
-  const b = data.bridge || {};
-  $('session').textContent = b.session_expired ? '需要重新登录' : '正常';
-  $('session').className = 'v ' + (b.session_expired ? 'bad' : 'ok');
-  $('lastSync').textContent = b.last_sync_at ? new Date(b.last_sync_at).toLocaleString() : '从未';
-  $('counts').textContent = (b.counts && b.counts.daily_rows ? b.counts.daily_rows : 0) + ' 天';
-  $('latest').textContent = b.latest_data_date || '-';
-  $('summary').textContent = data.markdown || '暂无数据';
-  $('mcpUrl').textContent = (location.origin) + '/mcp';
-
-  const login = data.login || {};
-  if (login.state === 'pending' && login.qr) {
-    $('qrBox').classList.remove('hidden');
-    $('qrImg').src = login.qr;
-    $('qrLink').href = login.login_url || '#';
-    $('qrLink').textContent = login.login_url || '';
-    $('qrState').textContent = '等待手机确认…';
-    $('btnLoginXiaomi').disabled = true;
-  } else if (login.state === 'success') {
-    $('qrState').textContent = '登录成功，session 已保存。';
-    $('btnLoginXiaomi').disabled = false;
-  } else if (login.state === 'needs_notification') {
-    $('qrState').textContent = login.error || '需要安全确认';
-    if (login.notification_url) { $('qrLink').href = login.notification_url; $('qrLink').textContent = login.notification_url; }
-    $('btnLoginXiaomi').disabled = false;
-  } else if (login.state === 'error') {
-    $('qrState').textContent = '登录失败：' + (login.error || '未知错误');
-    $('btnLoginXiaomi').disabled = false;
-  }
-
-  const sync = data.sync || {};
-  if (sync.state === 'running') {
-    $('syncState').textContent = '同步中（' + sync.days + ' 天）…';
-  } else if (sync.state === 'done') {
-    $('syncState').textContent = '同步完成：' + JSON.stringify(sync.result || {});
-    setTimeout(refresh, 1500);
-  } else if (sync.state === 'error') {
-    $('syncState').textContent = '同步失败：' + (sync.error || '');
-  }
-}
-
-async function refresh() {
-  try { render(await api('/status')); }
-  catch (e) { if (String(e.message).includes('401')) { showLogin(); } }
-}
-
-function poll() {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(refresh, 2500);
-}
-
-async function startXiaomiLogin() {
-  $('btnLoginXiaomi').disabled = true;
-  try { await api('/xiaomi/login', { method: 'POST', body: '{}' }); poll(); }
-  catch (e) { $('qrState').textContent = e.message; $('btnLoginXiaomi').disabled = false; }
-}
-
-async function startSync(days) {
-  try { await api('/sync?days=' + days, { method: 'POST', body: '{}' }); refresh(); }
-  catch (e) { $('syncState').textContent = e.message; }
-}
-
-async function showToken() {
-  try { const d = await api('/token'); $('tokenVal').textContent = d.token; $('tokenBox').classList.remove('hidden'); }
-  catch (e) { $('tokenBox').textContent = e.message; $('tokenBox').classList.remove('hidden'); }
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-  $('btnLogin').onclick = login;
-  $('password').onkeydown = (e) => { if (e.key === 'Enter') login(); };
-  $('btnLoginXiaomi').onclick = startXiaomiLogin;
-  document.querySelectorAll('[data-days]').forEach((el) => { el.onclick = () => startSync(el.dataset.days); });
-  $('btnToken').onclick = showToken;
-  $('btnLogout').onclick = async () => { await api('/logout', { method: 'POST', body: '{}' }); location.reload(); };
-  try { await api('/healthz'); showDash(); refresh(); poll(); }
-  catch (e) { showLogin(); }
-});
-</script>
-</body>
-</html>
-"""
