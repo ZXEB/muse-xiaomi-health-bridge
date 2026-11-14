@@ -30,7 +30,8 @@ services:
     image: xiaomi-health-bridge:local
     container_name: xiaomi-health-sync
     restart: unless-stopped
-    command: ["python", "-m", "health_bridge.sync", "--daemon"]
+    entrypoint: ["python", "-m", "health_bridge.sync"]
+    command: ["--daemon"]
     env_file:
       - .env
     environment:
