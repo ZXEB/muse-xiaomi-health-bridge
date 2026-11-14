@@ -7,17 +7,20 @@ cd "$ROOT"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 mkdir -p backups
+chmod 700 backups
 
 echo "[backup] sqlite -> backups/health-${STAMP}.db"
 docker compose exec -T bridge sqlite3 /data/health.db ".backup '/data/health-backup.db'"
 docker compose cp bridge:/data/health-backup.db "backups/health-${STAMP}.db"
 docker compose exec -T bridge rm -f /data/health-backup.db
+chmod 600 "backups/health-${STAMP}.db"
 
 echo "[backup] mifit session -> backups/mifit-session-${STAMP}.tgz"
-docker run --rm --user 1000:1000 \
+docker run --rm \
   -v mifit_session:/src:ro \
   -v "$PWD/backups":/backup \
   alpine:3.20 tar czf "/backup/mifit-session-${STAMP}.tgz" -C /src .
+chmod 600 "backups/mifit-session-${STAMP}.tgz"
 
 if [[ -n "${BACKUP_PASSPHRASE:-}" ]]; then
   echo "[backup] encrypting with BACKUP_PASSPHRASE"
