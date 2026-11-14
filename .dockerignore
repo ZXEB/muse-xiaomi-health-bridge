@@ -1,0 +1,12 @@
+.git
+.tools
+.cache
+.tmp
+.venv
+tests
+docs
+backups
+.env
+*.db
+__pycache__
+*.pyc

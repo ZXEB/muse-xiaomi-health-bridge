@@ -1,0 +1,54 @@
+services:
+  bridge:
+    build: .
+    image: xiaomi-health-bridge:local
+    container_name: xiaomi-health-bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      DB_PATH: /data/health.db
+    ports:
+      - "127.0.0.1:${REST_PORT:-8787}:8787"
+      - "127.0.0.1:${MCP_PORT:-8788}:8788"
+    volumes:
+      - health_data:/data
+      - mifit_session:/home/health/.mifit
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sync:
+    build: .
+    image: xiaomi-health-bridge:local
+    container_name: xiaomi-health-sync
+    restart: unless-stopped
+    command: ["python", "-m", "health_bridge.sync", "--daemon"]
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      DB_PATH: /data/health.db
+    volumes:
+      - health_data:/data
+      - mifit_session:/home/health/.mifit
+    depends_on:
+      - bridge
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  health_data:
+    name: health_data
+  mifit_session:
+    name: mifit_session
