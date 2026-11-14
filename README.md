@@ -5,6 +5,7 @@
 - 数据来源：`mifit`（非官方，读取你自己的小米账号云端已同步数据）
 - 服务端：Docker Compose（`bridge` + `sync`），SQLite 本地库
 - 对外：`https://<域名>/mcp`（Streamable HTTP MCP，Bearer 鉴权）+ `/v1/*`（REST/OpenAPI）
+- 管理后台：`https://<域名>/admin`（独立密码，扫码登录小米、手动同步、看摘要）
 - 只读：不写账号、不控制手表；默认不含 GPS 轨迹
 
 ## 架构
@@ -30,16 +31,19 @@
 ```bash
 cd /opt/health-bridge
 cp deploy/health-bridge.env.example .env
-# 编辑 .env：BRIDGE_TOKEN=$(openssl rand -hex 32)、TZ=Asia/Shanghai
+# 编辑 .env：BRIDGE_TOKEN=$(openssl rand -hex 32)、ADMIN_PASSWORD=$(openssl rand -base64 18)、TZ=Asia/Shanghai
 docker compose up -d --build
 
-# 首次登录：终端显示二维码，用手机「小米运动健康」扫码
+# 打开 https://<域名>/admin 用 ADMIN_PASSWORD 登录，点“获取二维码”扫码
+# 也可以命令行登录：
 docker compose run --rm -it bridge mifit login
 
 # 先同步 7 天，再回填（默认 365 天，可改 BACKFILL_DAYS）
 docker compose run --rm sync --days 7
 docker compose run --rm sync --backfill
 ```
+
+管理后台功能：查看会话/同步状态、扫码登录小米、手动同步（7/30/365 天）、查看最近摘要、显示 MCP Token。
 
 验证：
 

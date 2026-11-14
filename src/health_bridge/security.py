@@ -32,6 +32,10 @@ def extract_token(headers: Headers) -> str | None:
     return api_key.strip() if api_key else None
 
 
+def is_public_path(path: str) -> bool:
+    return path in PUBLIC_PATHS or path.startswith("/docs") or path == "/admin" or path.startswith("/admin/")
+
+
 class TokenAuthMiddleware:
     """Require a bearer token (or X-API-Key) on every route except docs."""
 
@@ -45,7 +49,7 @@ class TokenAuthMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        if path in self.public_paths or path.startswith("/docs"):
+        if is_public_path(path):
             return await self.app(scope, receive, send)
 
         token = extract_token(Headers(scope=scope))
@@ -92,7 +96,7 @@ class RateLimitMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        if path in PUBLIC_PATHS or path.startswith("/docs"):
+        if is_public_path(path):
             return await self.app(scope, receive, send)
 
         if not self.limiter.allow(self.key):

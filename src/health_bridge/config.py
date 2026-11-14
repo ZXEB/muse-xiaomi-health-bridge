@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
 
     bridge_token: str = ""
+    admin_password: str = ""
     db_path: str = "/data/health.db"
     tz: str = "Asia/Shanghai"
 

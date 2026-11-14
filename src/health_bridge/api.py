@@ -4,6 +4,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import PlainTextResponse
 
 from . import __version__
+from .admin import create_admin_router
 from .security import RateLimiter, RateLimitMiddleware, TokenAuthMiddleware
 from .service import HealthService
 from .source import AuthExpiredError, UpstreamError
@@ -109,7 +110,9 @@ def create_rest_app(service: HealthService, token: str | None = None):
 
     @app.get("/")
     def root():
-        return {"name": "xiaomi-health-bridge", "version": __version__, "docs": "/docs"}
+        return {"name": "xiaomi-health-bridge", "version": __version__, "docs": "/docs", "admin": "/admin"}
+
+    app.include_router(create_admin_router(service))
 
     inner = TokenAuthMiddleware(
         app,

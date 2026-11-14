@@ -165,6 +165,7 @@ class FakeClient:
 def make_settings(tmp_path, token: str = TOKEN, **overrides) -> Settings:
     values = {
         "bridge_token": token,
+        "admin_password": "admin-pass",
         "db_path": str(tmp_path / "health.db"),
         "tz": "Asia/Shanghai",
         "min_request_interval": 0.0,
