@@ -67,6 +67,8 @@ Connect with the official MCP SDK, call get_daily_summary for the last 7 days en
 show me the results, set the connector to read-only, and save the integration as a reusable skill.
 ```
 
+> 想让 Muse 能主动刷新数据：把连接器权限设为 **allow / approval**，这样它可以调用 `sync_now` 拉一次小米云数据；纯查询工具仍是只读的。
+
 也可以把 `https://<域名>/openapi.json` 交给 Muse 自动生成连接器。
 
 ## 接口

@@ -1,8 +1,39 @@
 from __future__ import annotations
 
+import os
+import time
 from datetime import date
+from pathlib import Path
 
-from health_bridge.sync import compute_next_run, iter_chunks, read_schedule, run_sync
+import pytest
+
+from health_bridge.sync import (
+    SyncBusyError,
+    compute_next_run,
+    iter_chunks,
+    read_schedule,
+    run_sync,
+)
+
+
+def test_sync_lock_blocks_concurrent_run(service):
+    lock_path = Path(service.settings.db_path).parent / "sync.lock"
+    lock_path.write_text("other-process", encoding="utf-8")
+    try:
+        with pytest.raises(SyncBusyError):
+            run_sync(service.settings, service.db, service.source, 1, today=date(2026, 11, 14))
+    finally:
+        lock_path.unlink(missing_ok=True)
+
+
+def test_stale_sync_lock_is_recovered(service):
+    lock_path = Path(service.settings.db_path).parent / "sync.lock"
+    lock_path.write_text("crashed-process", encoding="utf-8")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+    result = run_sync(service.settings, service.db, service.source, 1, today=date(2026, 11, 14))
+    assert result["errors"] == []
+    assert not lock_path.exists()
 
 
 def test_read_schedule_defaults(service):

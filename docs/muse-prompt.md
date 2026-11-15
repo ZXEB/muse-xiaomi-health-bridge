@@ -22,6 +22,24 @@ Muse 问 transport 时回答 **HTTP（streamable）**，问鉴权时回答 **Bea
 Muse 也可以从 OpenAPI 生成连接器：给它
 `https://<域名>/openapi.json`，鉴权同上。REST 与 MCP 读取同一份 SQLite，结果一致。
 
+## 让 Muse 自己刷新数据
+
+MCP 里有一个 `sync_now(days)` 工具：Muse 可以随时调用它，从小米云拉一次最新数据（只读，不改账号），拉完再读摘要就能看到新值。
+
+在 Muse 里直接说：
+
+- 「刷新一下我的小米数据」
+- 「同步最新健康数据再总结」
+- 「先 sync 再告诉我今天走了多少步」
+
+如果 Muse 提示没有权限或连接器是只读：
+
+- 打开 Muse 的 **Settings → Connectors**，找到这个健康连接器；
+- 把权限从 **read-only** 改成 **每次询问（approval）** 或 **允许（allow）**；
+- 之后 Muse 调 `sync_now` 就不会被拦；只读的查询工具不受影响。
+
+> 注意：`sync_now` 会和小米云交互，通常 5–30 秒；如果后台正好在自动同步，会返回 `busy=true`，让 Muse 稍后再试即可。
+
 ## 验收提问
 
 - 我昨晚睡了多久？深睡多少？

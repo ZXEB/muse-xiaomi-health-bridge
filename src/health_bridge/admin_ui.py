@@ -403,7 +403,7 @@ ADMIN_HTML = r'''<!doctype html>
       <div class="card" style="margin-bottom:14px">
         <h3>修改管理密码</h3>
         <div class="grid cols-3" style="margin-bottom:12px">
-          <input id="pwCurrent" class="input" type="password" placeholder="当前密码" autocomplete="current-password">
+          <input id="pwCurrent" class="input" type="password" placeholder="当前密码" autocomplete="off">
           <input id="pwNew" class="input" type="password" placeholder="新密码（至少 8 位）" autocomplete="new-password">
           <input id="pwConfirm" class="input" type="password" placeholder="确认新密码" autocomplete="new-password">
         </div>
@@ -928,6 +928,8 @@ ADMIN_HTML = r'''<!doctype html>
     msg.textContent = "";
     if(next.length < 8){ msg.textContent = "新密码至少需要 8 个字符"; return; }
     if(next !== again){ msg.textContent = "两次输入的新密码不一致"; return; }
+    var ok = await confirmBox("修改管理密码", "修改后其他浏览器会退出登录，当前页面自动续期。确定要修改吗？", "修改密码");
+    if(!ok){ return; }
     try{
       await api("/password", {method:"POST", body:{current:current, new:next}});
       $("#pwCurrent").value = ""; $("#pwNew").value = ""; $("#pwConfirm").value = "";

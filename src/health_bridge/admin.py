@@ -575,7 +575,7 @@ def create_admin_router(service: HealthService) -> APIRouter:
         service.db.set_setting("admin_password_hash", _hash_password(new_password))
         epoch = str(int(_epoch(service)) + 1)
         service.db.set_setting("admin_session_epoch", epoch)
-        audit(request, "password.change")
+        audit(request, "password.change", "changed via admin UI")
         expires_at = int(time.time()) + COOKIE_TTL_S
         secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
         response = JSONResponse({"ok": True})

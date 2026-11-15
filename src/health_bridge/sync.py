@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import time
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from .config import Settings, get_settings
 from .db import Database
@@ -13,6 +16,48 @@ log = logging.getLogger("health_bridge.sync")
 
 CHUNK_DAYS = 31
 DEFAULT_SYNC_DAYS = 7
+LOCK_STALE_SECONDS = 900
+
+
+class SyncBusyError(RuntimeError):
+    """Another process is already syncing; retry shortly instead of queuing up."""
+
+
+@contextmanager
+def sync_lock(db_path: str):
+    """Cross-process guard so the daemon and an MCP/REST trigger never overlap.
+
+    A plain O_EXCL lock file works on Windows and Linux; a lock older than
+    LOCK_STALE_SECONDS is treated as a crashed run and removed.
+    """
+
+    path = Path(db_path).parent / "sync.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                age = time.time() - path.stat().st_mtime
+            except OSError:
+                continue
+            if age > LOCK_STALE_SECONDS:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                continue
+            raise SyncBusyError("a sync is already running; try again in a minute")
+    try:
+        yield
+    finally:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def read_schedule(db: Database, settings: Settings) -> dict:
@@ -76,32 +121,33 @@ def run_sync(
     errors: list[str] = []
     chunks = 0
 
-    for chunk_start, chunk_end in iter_chunks(start, end):
-        chunks += 1
-        for domain, fn in DOMAINS.items():
+    with sync_lock(settings.db_path):
+        for chunk_start, chunk_end in iter_chunks(start, end):
+            chunks += 1
+            for domain, fn in DOMAINS.items():
+                try:
+                    rows = fn(source, chunk_start.isoformat(), chunk_end.isoformat())
+                    db.upsert_daily(rows)
+                    db.set_sync_state(domain, chunk_end.isoformat(), None)
+                except AuthExpiredError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - report and continue
+                    message = f"{domain} {chunk_start}..{chunk_end}: {exc}"[:500]
+                    errors.append(message)
+                    db.set_sync_state(domain, None, message)
+                    log.warning("sync failed: %s", message)
+
             try:
-                rows = fn(source, chunk_start.isoformat(), chunk_end.isoformat())
-                db.upsert_daily(rows)
-                db.set_sync_state(domain, chunk_end.isoformat(), None)
+                rows = source.workouts(chunk_start.isoformat(), chunk_end.isoformat())
+                db.upsert_workouts(rows)
+                db.set_sync_state("workouts", chunk_end.isoformat(), None)
             except AuthExpiredError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - report and continue
-                message = f"{domain} {chunk_start}..{chunk_end}: {exc}"[:500]
+            except Exception as exc:  # noqa: BLE001
+                message = f"workouts {chunk_start}..{chunk_end}: {exc}"[:500]
                 errors.append(message)
-                db.set_sync_state(domain, None, message)
+                db.set_sync_state("workouts", None, message)
                 log.warning("sync failed: %s", message)
-
-        try:
-            rows = source.workouts(chunk_start.isoformat(), chunk_end.isoformat())
-            db.upsert_workouts(rows)
-            db.set_sync_state("workouts", chunk_end.isoformat(), None)
-        except AuthExpiredError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            message = f"workouts {chunk_start}..{chunk_end}: {exc}"[:500]
-            errors.append(message)
-            db.set_sync_state("workouts", None, message)
-            log.warning("sync failed: %s", message)
 
     return {
         "from": start.isoformat(),
@@ -120,12 +166,16 @@ def daemon(settings: Settings, db: Database, source: MiFitnessSource) -> None:
             run_sync(settings, db, source, settings.backfill_days)
         except AuthExpiredError:
             log.error("mifit session expired; waiting for a fresh `mifit login`")
+        except SyncBusyError:
+            log.warning("another sync is running; skipping the startup backfill")
     else:
         log.info("startup incremental sync (%s days)", schedule["days"])
         try:
             run_sync(settings, db, source, schedule["days"])
         except AuthExpiredError:
             log.error("mifit session expired")
+        except SyncBusyError:
+            log.warning("another sync is running; skipping the startup sync")
     _record_run(db, settings)
 
     logged_target: datetime | None = None
