@@ -158,6 +158,45 @@ ADMIN_HTML = r'''<!doctype html>
     .main{padding:16px}
     .cols-4{grid-template-columns:1fr}
   }
+  /* Calm, daylight dashboard. All controls retain their existing behavior. */
+  :root{color-scheme:light;--bg:#f5f7fa;--panel:#fff;--panel-2:#f7f9fc;--line:#e7ecf2;--line-2:#d9e1eb;--text:#202d40;--muted:#66758b;--muted-2:#7a8799;--accent:#4275e8;--accent-2:#8b74da;--green:#19947c;--red:#d95566;--amber:#b47c18;--radius:18px;--shadow:0 18px 60px rgba(32,53,88,.08)}
+  body{background:var(--bg);font-size:14px;-webkit-font-smoothing:antialiased}
+  .sidebar{width:220px;flex-basis:220px;background:#fff;padding:28px 16px 18px}
+  .brand-row{padding:0 8px 32px;gap:12px}.brand-row .logo{width:38px;height:38px}
+  .brand-row .name{font-size:16px;letter-spacing:.3px}.brand-row .sub{margin-top:3px;letter-spacing:1px;font-size:10px}
+  nav{gap:7px}nav a{padding:12px 14px;border-radius:12px;color:#718096}nav a svg{width:19px;height:19px}
+  nav a:hover{background:#f5f8fd}nav a.active{background:#edf3ff;border-color:transparent;color:#386bdb;box-shadow:inset 3px 0 #4f80eb}
+  .sidebar-foot{padding:18px 8px 0}.main{padding:32px 36px 56px;max-width:1720px;margin:0 auto}
+  .topbar{padding-bottom:24px;margin-bottom:26px;border-bottom:1px solid var(--line)}.topbar h2{font-size:23px;font-weight:700;letter-spacing:-.5px}.crumb{margin-top:5px}
+  .pill{background:#fff;padding:8px 13px}.icon-btn{width:38px;height:38px}.icon-btn:hover{border-color:#a9bee7;background:#f1f5fe}
+  .dashboard-intro{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}
+  .eyebrow{font-size:10px;font-weight:700;letter-spacing:2.5px;color:#7187a5;margin-bottom:7px}
+  .dashboard-intro h1{font-size:27px;line-height:1.3;letter-spacing:-.7px;margin:0 0 8px}.dashboard-intro p{margin:0;color:var(--muted);font-size:13px}
+  .intro-tag{color:#628170;background:#eaf3ed;border:1px solid #dceadf;border-radius:9px;padding:8px 12px;font-size:12px;white-space:nowrap;display:flex;gap:7px;align-items:center}
+  .intro-tag svg{width:15px;height:15px}
+  .grid{gap:20px}.card{background:#fff;padding:23px;border-color:#e6ebf2;box-shadow:0 3px 12px rgba(35,56,86,.025)}
+  .card h3{font-size:13px;letter-spacing:0;color:#637189}.card-head{margin-bottom:22px;min-height:22px}.card-head h3{font-size:14px;color:#35445b}
+  .metric-grid{margin-bottom:24px!important}.metric-card{position:relative;overflow:hidden;padding-top:25px;min-height:169px}
+  .metric-card h3{padding-right:42px;margin-bottom:17px}.metric-icon{position:absolute;right:20px;top:20px;width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--metric-bg);color:var(--metric-color)}
+  .metric-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .metric-card:after{content:"";position:absolute;left:23px;right:23px;bottom:0;height:3px;background:var(--metric-bg);border-radius:4px 4px 0 0}
+  .metric-steps{--metric-bg:#eaf1ff;--metric-color:#4f80eb}.metric-sleep{--metric-bg:#f0ecfc;--metric-color:#9275d3}.metric-heart{--metric-bg:#fff0ef;--metric-color:#df7e80}.metric-workouts{--metric-bg:#e7f4ef;--metric-color:#39a58b}
+  .stat{font-size:32px;line-height:1.25;letter-spacing:-1px;font-variant-numeric:tabular-nums;font-weight:650}.stat small{font-size:12px;letter-spacing:0;margin-left:6px}.stat-sub{margin-top:12px;font-size:11px}
+  .trend-grid{margin-bottom:20px!important}.chart{height:180px}.axis{margin-top:12px;font-variant-numeric:tabular-nums}.legend{margin-top:15px;gap:16px;color:var(--muted)}
+  .btn{background:#4779e9;box-shadow:0 3px 7px rgba(66,117,232,.12);border-radius:10px}.btn.ghost{box-shadow:none;background:#f8faff}.btn.ghost:hover{border-color:#b5c7e7}.btn.danger{background:#d95566}
+  .input,select,input[type=date]{background:#fafbfd}.seg button.active{background:#fff;color:#386bdb;box-shadow:0 1px 5px #dce3ee}
+  th{background:#f6f8fc;color:#65748a}td{color:#3f5068;border-bottom-color:#edf0f5}tr:hover td{background:#f6f9ff}.kv .v{color:#3f5068}
+  pre.code{background:#f5f7fc;color:#465b78;border-color:#e0e6ef}.warn-box{background:#fff9ec;color:#906b21;border-color:#f0e0b8}
+  .toast{background:#fff}.banner{background:#fff1f2;border-color:#f3d5da;color:#b34253}.empty{padding:50px 20px;color:#8491a3;font-size:13px}
+  .workout-row{padding:15px 0;border-bottom:1px solid var(--line)}.workout-row:last-child{border-bottom:0}
+  .login-view{background:radial-gradient(ellipse at 22% 20%,#e7eefb,transparent 55%),radial-gradient(ellipse at 80% 80%,#e7f3ef,transparent 55%),#f5f7fa}
+  .login-card{background:#fff;border-radius:24px;padding:38px;max-width:440px}.login-brand{margin-bottom:32px}.login-card .hint{line-height:1.8}.login-foot{line-height:1.8}
+  :focus-visible{outline:3px solid #8eafea;outline-offset:3px}button:focus-visible,a:focus-visible{outline:3px solid #8eafea;outline-offset:3px}
+  @media(min-width:1500px){.main{padding:40px 48px 60px}.chart{height:200px}}
+  @media(max-width:1150px){.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}.main{padding:26px 24px}.sidebar{width:190px;flex-basis:190px}.top-actions{gap:7px}}
+  @media(max-width:980px){.cols-2,.cols-3{grid-template-columns:1fr}.dashboard-intro h1{font-size:24px}}
+  @media(max-width:760px){.sidebar{width:100%;height:auto;position:sticky;top:0;z-index:20;display:block;padding:14px 16px 0;overflow:visible;box-shadow:0 3px 12px rgba(35,56,86,.04)}.brand-row{padding:0 0 12px}.brand-row .logo{width:30px;height:30px}.brand-row .sub{display:none}nav{overflow-x:auto;gap:4px;padding:0 0 10px;scrollbar-width:thin}nav a{padding:9px 12px;flex-shrink:0;font-size:12px;gap:6px}nav a svg{width:15px;height:15px}.main{padding:22px 16px 36px}.topbar{margin-bottom:22px;padding-bottom:18px;gap:8px}.topbar h2{font-size:20px}.top-actions{gap:6px}.pill{font-size:10px;padding:7px 9px;gap:6px}.icon-btn{width:32px;height:32px}.dashboard-intro{align-items:flex-start;margin-bottom:20px}.dashboard-intro h1{font-size:23px}.dashboard-intro p{font-size:12px;max-width:250px}.intro-tag{display:none}.grid{gap:12px}.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:18px}.metric-card{min-height:158px}.metric-icon{right:14px;top:16px;width:29px;height:29px}.metric-icon svg{width:17px;height:17px}.metric-card h3{font-size:11px;padding-right:28px}.stat{font-size:25px}.stat-sub{font-size:10px}.metric-card:after{left:18px;right:18px}.card-head{gap:8px}.card-head h3{font-size:13px}.chart{height:165px}.kv{grid-template-columns:1fr;gap:5px}.kv .v{margin-bottom:8px}.copy-row{flex-wrap:wrap}.toolbar .input,.toolbar select{max-width:100%}.banner{flex-wrap:wrap}.login-card{padding:28px 24px}.topbar .crumb{font-size:11px}}
+  @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -171,7 +210,7 @@ ADMIN_HTML = r'''<!doctype html>
     <h2>管理后台</h2>
     <div class="hint">首次登录使用服务器 <span class="mono">/opt/health-bridge/.env</span> 里的 <span class="mono">ADMIN_PASSWORD</span>，登录后可在「设置」里修改。</div>
     <div class="field">
-      <input id="password" class="input" type="password" placeholder="管理密码" autocomplete="current-password">
+      <input id="password" class="input" aria-label="管理密码" type="password" placeholder="管理密码" autocomplete="current-password">
       <button id="btnLogin" class="btn">登录</button>
     </div>
     <div id="loginError" class="error"></div>
@@ -208,26 +247,30 @@ ADMIN_HTML = r'''<!doctype html>
       </div>
       <div class="top-actions">
         <span id="syncPill" class="pill"><span class="dot warn"></span>加载中</span>
-        <button id="btnRefresh" class="icon-btn" title="刷新"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button>
-        <button id="btnLogout" class="icon-btn" title="退出"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h10"/></svg></button>
+        <button id="btnRefresh" class="icon-btn" title="刷新" aria-label="刷新数据"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button>
+        <button id="btnLogout" class="icon-btn" title="退出" aria-label="退出登录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h10"/></svg></button>
       </div>
     </header>
 
     <section id="page-overview" class="page">
+      <div class="dashboard-intro">
+        <div><div class="eyebrow">YOUR HEALTH, CONNECTED</div><h1>每一天，都更了解自己。</h1><p>步数、睡眠与运动，让健康变化清晰可见。</p></div>
+        <div class="intro-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg>个人健康数据空间</div>
+      </div>
       <div id="overviewBanner" class="banner hidden">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:#f87171"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
         <span>小米登录已失效，数据暂停更新。</span>
         <button class="btn sm" onclick="location.hash='#/xiaomi'">重新登录</button>
       </div>
 
-      <div class="grid cols-4" style="margin-bottom:14px">
-        <div class="card"><h3>今日步数</h3><div id="statSteps" class="stat">—</div><div id="statStepsSub" class="stat-sub">—</div></div>
-        <div class="card"><h3>最近睡眠</h3><div id="statSleep" class="stat">—</div><div id="statSleepSub" class="stat-sub">—</div></div>
-        <div class="card"><h3>静息心率</h3><div id="statHr" class="stat">—</div><div id="statHrSub" class="stat-sub">—</div></div>
-        <div class="card"><h3>近 7 天运动</h3><div id="statWorkouts" class="stat">—</div><div id="statWorkoutsSub" class="stat-sub">—</div></div>
+      <div class="grid cols-4 metric-grid">
+        <div class="card metric-card metric-steps"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m13 4-3 5 4 3-2 8M10 9 6 12l-3-1M14 7l3 4h4M7 21l3-5"/><circle cx="16" cy="3" r="1.5"/></svg></div><h3>最近步数</h3><div id="statSteps" class="stat">—</div><div id="statStepsSub" class="stat-sub">—</div></div>
+        <div class="card metric-card metric-sleep"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/></svg></div><h3>最近睡眠</h3><div id="statSleep" class="stat">—</div><div id="statSleepSub" class="stat-sub">—</div></div>
+        <div class="card metric-card metric-heart"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 13c5-7-4-13-8-6-4-7-13-1-8 6l8 8Z"/><path d="M3 12h5l2-3 3 6 2-3h6"/></svg></div><h3>静息心率</h3><div id="statHr" class="stat">—</div><div id="statHrSub" class="stat-sub">—</div></div>
+        <div class="card metric-card metric-workouts"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 4-3 3 13 13 3-3ZM4 14l6 6M14 4l6 6M2 17l5 5M17 2l5 5"/></svg></div><h3>近 7 天运动</h3><div id="statWorkouts" class="stat">—</div><div id="statWorkoutsSub" class="stat-sub">—</div></div>
       </div>
 
-      <div class="grid cols-2" style="margin-bottom:14px">
+      <div class="grid cols-2 trend-grid">
         <div class="card">
           <div class="card-head"><h3>步数 · 近 30 天</h3><span id="stepsMeta" class="muted" style="font-size:12px"></span></div>
           <div id="chartSteps"></div>
@@ -237,7 +280,7 @@ ADMIN_HTML = r'''<!doctype html>
           <div class="card-head"><h3>睡眠结构 · 近 30 天</h3><span class="muted" style="font-size:12px">深睡 / 浅睡 / REM / 清醒</span></div>
           <div id="chartSleep"></div>
           <div class="axis"><span id="sleepFrom"></span><span id="sleepTo"></span></div>
-          <div class="legend"><span><i style="background:#4f8cff"></i>深睡</span><span><i style="background:#2f5fa8"></i>浅睡</span><span><i style="background:#7c5cff"></i>REM</span><span><i style="background:#3a4252"></i>清醒</span></div>
+          <div class="legend"><span><i style="background:#7f91db"></i>深睡</span><span><i style="background:#c4d4f7"></i>浅睡</span><span><i style="background:#b49cdd"></i>REM</span><span><i style="background:#e2e7ef"></i>清醒</span></div>
         </div>
       </div>
 
@@ -507,7 +550,7 @@ ADMIN_HTML = r'''<!doctype html>
   function gridLines(h){
     var out = "";
     [0.25,0.5,0.75].forEach(function(p){
-      out += '<line x1="0" y1="' + (h*p).toFixed(1) + '" x2="600" y2="' + (h*p).toFixed(1) + '" stroke="#1c2433" stroke-width="1"/>';
+      out += '<line x1="0" y1="' + (h*p).toFixed(1) + '" x2="600" y2="' + (h*p).toFixed(1) + '" stroke="#edf1f6" stroke-width="1"/>';
     });
     return out;
   }
@@ -525,7 +568,7 @@ ADMIN_HTML = r'''<!doctype html>
   }
   function stackedSleep(sleep){
     var W = 600, H = 150, n = sleep.dates.length || 1, bw = W / n;
-    var colors = { deep: "#4f8cff", light: "#2f5fa8", rem: "#7c5cff", awake: "#3a4252" };
+    var colors = { deep: "#7f91db", light: "#c4d4f7", rem: "#b49cdd", awake: "#e2e7ef" };
     var bars = "";
     sleep.dates.forEach(function(d, i){
       var total = (sleep.series.sleep_deep_min[i] || 0) + (sleep.series.sleep_light_min[i] || 0) + (sleep.series.sleep_rem_min[i] || 0) + (sleep.series.sleep_awake_min[i] || 0);
@@ -606,7 +649,7 @@ ADMIN_HTML = r'''<!doctype html>
 
     $("#chartSteps").innerHTML = barChart(t.series.steps, "#4f8cff");
     $("#chartSleep").innerHTML = stackedSleep(t);
-    $("#chartHr").innerHTML = lineChart(t.series.hr_resting, "#34d399");
+    $("#chartHr").innerHTML = lineChart(t.series.hr_resting, "#db858c");
     $("#stepsMeta").textContent = "合计 " + fmtNum(t.series.steps.reduce(function(a,b){ return a + (b||0); }, 0)) + " 步";
     var hrVals = t.series.hr_resting.filter(function(v){ return v != null; });
     $("#hrMeta").textContent = hrVals.length ? ("均值 " + fmtFloat(hrVals.reduce(function(a,b){ return a+b; },0)/hrVals.length,0) + " bpm") : "";
@@ -620,7 +663,7 @@ ADMIN_HTML = r'''<!doctype html>
     else {
       $("#recentWorkouts").innerHTML = wl.map(function(w){
         var meta = [sportLabel(w.sport), w.distance_m ? fmtFloat(w.distance_m/1000,2)+" km" : "", w.duration_s ? Math.round(w.duration_s/60)+" 分钟" : "", w.avg_hr ? "心率 "+fmtNum(w.avg_hr) : ""].filter(Boolean).join(" · ");
-        return '<div style="padding:10px 0;border-bottom:1px solid #1a2231"><div style="display:flex;justify-content:space-between;gap:10px"><span style="font-weight:600">' + esc(sportLabel(w.sport)) + '</span><span class="muted" style="font-size:12px">' + esc((w.start_time||w.date||"").slice(0,16).replace("T"," ")) + '</span></div><div class="muted" style="font-size:12px;margin-top:2px">' + esc(meta) + '</div></div>';
+        return '<div class="workout-row"><div style="display:flex;justify-content:space-between;gap:10px"><span style="font-weight:600">' + esc(sportLabel(w.sport)) + '</span><span class="muted" style="font-size:12px">' + esc((w.start_time||w.date||"").slice(0,16).replace("T"," ")) + '</span></div><div class="muted" style="font-size:12px;margin-top:2px">' + esc(meta) + '</div></div>';
       }).join("");
     }
 
