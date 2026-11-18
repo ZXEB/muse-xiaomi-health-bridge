@@ -98,6 +98,11 @@ CREATE TABLE IF NOT EXISTS workouts (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS sleep_details (
+    date TEXT PRIMARY KEY,
+    sessions_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sync_state (
     domain TEXT PRIMARY KEY,
     last_synced_at TEXT,
@@ -160,6 +165,12 @@ class Database:
                 payload["updated_at"] = now
                 values = [payload.get(c) for c in DAILY_COLUMNS]
                 conn.execute(sql, values)
+                if "sleep_sessions" in payload:
+                    conn.execute(
+                        "INSERT INTO sleep_details(date, sessions_json) VALUES (?,?) "
+                        "ON CONFLICT(date) DO UPDATE SET sessions_json=excluded.sessions_json",
+                        (payload["date"], json.dumps(payload["sleep_sessions"])),
+                    )
 
     def upsert_workouts(self, rows: Sequence[dict[str, Any]]) -> None:
         if not rows:
@@ -224,6 +235,20 @@ class Database:
                 (start, end),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def sleep_between(self, start: str, end: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT date, sleep_total_min, sessions_json FROM daily_metrics "
+                "LEFT JOIN sleep_details USING (date) "
+                "WHERE date BETWEEN ? AND ? AND sleep_total_min IS NOT NULL ORDER BY date",
+                (start, end),
+            )
+            return [
+                {"date": row["date"], "total_min": row["sleep_total_min"],
+                 "sessions": json.loads(row["sessions_json"]) if row["sessions_json"] else []}
+                for row in cursor
+            ]
 
     def latest_date(self) -> str | None:
         with self._connect() as conn:

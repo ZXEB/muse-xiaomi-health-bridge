@@ -17,6 +17,7 @@ PUBLIC_PATHS = frozenset(
         "/docs/oauth2-redirect",
         "/redoc",
         "/favicon.ico",
+        "/favicon.png",
         "/favicon.svg",
         "/apple-touch-icon.png",
     }

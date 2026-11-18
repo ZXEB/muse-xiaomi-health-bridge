@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 from .config import Settings
 from .db import Database
+from .sleep import describe_sleep_day
 from .source import MiFitnessSource
 from .summary import build_summary, to_markdown
 from .sync import run_sync
@@ -154,6 +155,18 @@ class HealthService:
             "to": end_date.isoformat(),
             "rows": rows,
             "notes": notes,
+        }
+
+    def sleep_days(self, days: int = 30) -> dict[str, Any]:
+        days = max(1, min(days, MAX_RANGE_DAYS))
+        end = self.today()
+        start = end - timedelta(days=days - 1)
+        rows = self.db.sleep_between(start.isoformat(), end.isoformat())
+        return {
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "dates": [(start + timedelta(days=i)).isoformat() for i in range(days)],
+            "days": [describe_sleep_day(row["date"], row["total_min"], row["sessions"]) for row in rows],
         }
 
     def summary(self, days: int = 7) -> dict[str, Any]:

@@ -125,6 +125,20 @@ class MiFitnessSource:
             ends = [s.end_epoch_s for s in rec.sessions if s.end_epoch_s]
             offsets = [s.utc_offset_s for s in rec.sessions if s.utc_offset_s is not None]
             offset = offsets[0] if offsets else None
+            sessions: dict[tuple[int, int], dict[str, Any]] = {}
+            for session in rec.sessions:
+                if session.asleep_min <= 0 or session.end_epoch_s <= session.start_epoch_s:
+                    continue
+                key = (session.start_epoch_s, session.end_epoch_s)
+                sessions.setdefault(key, {
+                    "start": _local_iso(session.start_epoch_s, session.utc_offset_s, self.settings.tzinfo),
+                    "end": _local_iso(session.end_epoch_s, session.utc_offset_s, self.settings.tzinfo),
+                    "asleep_min": session.asleep_min,
+                    "deep_min": session.deep_min,
+                    "light_min": session.light_min,
+                    "rem_min": session.rem_min,
+                    "awake_min": session.awake_min,
+                })
             rows.append(
                 {
                     "date": str(rec.date),
@@ -135,6 +149,7 @@ class MiFitnessSource:
                     "sleep_awake_min": rec.awake_min,
                     "sleep_start": _local_iso(min(starts) if starts else None, offset, self.settings.tzinfo),
                     "sleep_end": _local_iso(max(ends) if ends else None, offset, self.settings.tzinfo),
+                    "sleep_sessions": [sessions[key] for key in sorted(sessions)],
                 }
             )
         return rows

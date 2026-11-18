@@ -1,202 +1,17 @@
+from pathlib import Path
+
+
+_ADMIN_CSS = (Path(__file__).with_name("assets") / "admin.css").read_text(encoding="utf-8")
+
 ADMIN_HTML = r'''<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" sizes="128x128" href="/favicon.png?v=2">
 <title>小米健康桥 · 管理后台</title>
 <style>
-  :root{
-    --bg:#0a0d13; --panel:#111621; --panel-2:#161c29; --line:#1f2735; --line-2:#283243;
-    --text:#e8edf7; --muted:#8a95a8; --muted-2:#5f6b7f;
-    --accent:#4f8cff; --accent-2:#7c5cff; --green:#34d399; --red:#f87171; --amber:#fbbf24;
-    --radius:14px; --shadow:0 8px 30px rgba(0,0,0,.35);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#15203a 0%,transparent 60%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5}
-  a{color:var(--accent);text-decoration:none}
-  button{font-family:inherit}
-  .hidden{display:none!important}
-  .muted{color:var(--muted)}
-  .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
-
-  /* ---------- login ---------- */
-  .login-view{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-  .login-card{width:100%;max-width:420px;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent),var(--panel);border:1px solid var(--line);border-radius:20px;padding:34px 30px;box-shadow:var(--shadow)}
-  .login-brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-  .login-brand .logo{width:44px;height:44px}
-  .login-brand h1{font-size:18px;margin:0;font-weight:650}
-  .login-brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
-  .login-card h2{font-size:22px;margin:0 0 6px}
-  .login-card .hint{color:var(--muted);font-size:13px;margin-bottom:22px}
-  .field{display:flex;gap:10px}
-  .input,select,input[type=date]{width:100%;background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s}
-  .input:focus,select:focus,input[type=date]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,140,255,.18)}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;background:linear-gradient(180deg,#5b95ff,#3f7bf0);color:#fff;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:600;cursor:pointer;transition:transform .05s,filter .15s;white-space:nowrap}
-  .btn:hover{filter:brightness(1.08)}
-  .btn:active{transform:translateY(1px)}
-  .btn[disabled]{opacity:.55;cursor:not-allowed}
-  .btn.ghost{background:var(--panel-2);border-color:var(--line-2);color:var(--text);font-weight:500}
-  .btn.ghost:hover{border-color:#39465c;filter:none}
-  .btn.danger{background:linear-gradient(180deg,#f87171,#dc4c4c)}
-  .btn.sm{padding:7px 11px;font-size:12.5px;border-radius:8px}
-  .error{color:var(--red);font-size:13px;min-height:20px;margin-top:10px}
-  .login-foot{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted-2);font-size:12px}
-
-  /* ---------- app shell ---------- */
-  .app{display:flex;min-height:100vh}
-  .sidebar{width:228px;flex:0 0 228px;background:rgba(12,16,24,.72);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
-  .brand-row{display:flex;align-items:center;gap:11px;padding:6px 8px 18px}
-  .brand-row .logo{width:34px;height:34px}
-  .brand-row .name{font-weight:650;font-size:14.5px}
-  .brand-row .sub{color:var(--muted-2);font-size:11px}
-  nav{display:flex;flex-direction:column;gap:3px;margin-top:8px}
-  nav a{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:9px;color:var(--muted);font-size:13.5px;font-weight:500;border:1px solid transparent}
-  nav a svg{width:17px;height:17px;opacity:.85}
-  nav a:hover{background:var(--panel);color:var(--text)}
-  nav a.active{background:linear-gradient(90deg,rgba(79,140,255,.18),rgba(79,140,255,.06));color:#cfe0ff;border-color:rgba(79,140,255,.28)}
-  .sidebar-foot{margin-top:auto;padding:12px 8px 4px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
-  .dot{width:8px;height:8px;border-radius:99px;background:var(--green);box-shadow:0 0 0 4px rgba(52,211,153,.12)}
-  .dot.bad{background:var(--red);box-shadow:0 0 0 4px rgba(248,113,113,.12)}
-  .dot.warn{background:var(--amber);box-shadow:0 0 0 4px rgba(251,191,36,.12)}
-  .sidebar-foot .ver{margin-left:auto;color:var(--muted-2);font-size:11px}
-
-  .main{flex:1;min-width:0;padding:22px 28px 60px}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
-  .topbar h2{font-size:20px;margin:0;font-weight:650}
-  .crumb{color:var(--muted-2);font-size:12px;margin-top:3px}
-  .top-actions{display:flex;align-items:center;gap:10px}
-  .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px;color:var(--muted)}
-  .icon-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--muted);cursor:pointer}
-  .icon-btn:hover{color:var(--text);border-color:#39465c}
-  .icon-btn svg{width:17px;height:17px}
-
-  /* ---------- cards ---------- */
-  .grid{display:grid;gap:14px}
-  .cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .card{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent),var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
-  .card h3{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 12px;letter-spacing:.2px}
-  .stat{font-size:26px;font-weight:700;letter-spacing:-.3px}
-  .stat small{font-size:12px;color:var(--muted);font-weight:500;margin-left:4px}
-  .stat-sub{color:var(--muted);font-size:12px;margin-top:6px}
-  .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-  .card-head h3{margin:0}
-
-  .banner{display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,rgba(248,113,113,.12),rgba(248,113,113,.03));border:1px solid rgba(248,113,113,.35);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:13px}
-  .banner .btn{margin-left:auto}
-
-  .chart{width:100%;height:150px;display:block}
-  .chart-tall{height:170px}
-  .axis{display:flex;justify-content:space-between;color:var(--muted-2);font-size:11px;margin-top:6px}
-  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-size:11px;color:var(--muted-2)}
-  .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
-  .spin{animation:spin 1s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-
-  /* ---------- tables ---------- */
-  .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:520px}
-  table{width:100%;border-collapse:collapse;font-size:12.8px;white-space:nowrap}
-  th{position:sticky;top:0;background:#131926;color:var(--muted);font-weight:600;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);z-index:1}
-  td{padding:9px 12px;border-bottom:1px solid rgba(31,39,53,.7);color:#cfd7e6}
-  tr:hover td{background:rgba(79,140,255,.05)}
-  td.err{color:var(--red);max-width:340px;overflow:hidden;text-overflow:ellipsis}
-  td.ok{color:var(--green)}
-  .empty{padding:34px;text-align:center;color:var(--muted-2)}
-
-  /* ---------- forms / toolbars ---------- */
-  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-  .toolbar .input,.toolbar select{width:auto}
-  .grow{flex:1}
-  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;padding:3px;gap:2px}
-  .seg button{background:transparent;border:0;color:var(--muted);padding:7px 13px;border-radius:8px;font-size:12.5px;cursor:pointer}
-  .seg button:hover{color:var(--text)}
-  .seg button.active{background:#26314a;color:#cfe0ff}
-
-  /* ---------- qr ---------- */
-  .qr-panel{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;margin-top:16px}
-  .qr-img{width:200px;height:200px;background:#fff;border-radius:12px;padding:10px}
-  .qr-side{min-width:240px;flex:1}
-  .qr-link{word-break:break-all;font-size:12px;color:var(--muted)}
-  .steps{counter-reset:s;margin:10px 0 0;padding:0;list-style:none}
-  .steps li{position:relative;padding-left:28px;margin-bottom:9px;color:var(--muted);font-size:13px}
-  .steps li:before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:19px;height:19px;border-radius:99px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--muted);font-size:11px;display:flex;align-items:center;justify-content:center}
-
-  pre.code{background:#0b0f17;border:1px solid var(--line-2);border-radius:10px;padding:13px;overflow:auto;font-size:12px;line-height:1.6;color:#c7d2e5;white-space:pre-wrap;word-break:break-word;margin:0}
-  .kv{display:grid;grid-template-columns:180px 1fr;gap:9px 16px;font-size:13px}
-  .kv .k{color:var(--muted-2)}
-  .kv .v{color:#cfd7e6;word-break:break-all}
-  .copy-row{display:flex;gap:8px;align-items:center}
-  .copy-row .input{font-size:12.5px}
-  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);color:#f3d38a;border-radius:10px;padding:11px 14px;font-size:12.5px;margin-bottom:14px}
-
-  /* ---------- toast / modal ---------- */
-  #toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:60}
-  .toast{background:#182031;border:1px solid var(--line-2);border-left:3px solid var(--accent);border-radius:10px;padding:11px 15px;min-width:220px;max-width:340px;box-shadow:var(--shadow);font-size:13px;animation:in .18s ease}
-  .toast.ok{border-left-color:var(--green)}
-  .toast.bad{border-left-color:var(--red)}
-  @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .modal{position:fixed;inset:0;background:rgba(4,7,12,.65);display:flex;align-items:center;justify-content:center;z-index:70;padding:20px}
-  .modal-card{background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:var(--shadow)}
-  .modal-card h3{margin:0 0 8px;font-size:16px}
-  .modal-card p{color:var(--muted);font-size:13px;margin:0 0 18px}
-  .modal-actions{display:flex;justify-content:flex-end;gap:10px}
-
-  @media (max-width:980px){
-    .cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .cols-3,.cols-2{grid-template-columns:1fr}
-  }
-  @media (max-width:760px){
-    .app{display:block}
-    .sidebar{position:static;width:auto;height:auto;flex-direction:row;align-items:center;padding:12px;overflow-x:auto}
-    .brand-row{padding:0 12px 0 4px}
-    nav{flex-direction:row;margin:0}
-    nav a{padding:8px 10px}
-    .sidebar-foot{display:none}
-    .main{padding:16px}
-    .cols-4{grid-template-columns:1fr}
-  }
-  /* Calm, daylight dashboard. All controls retain their existing behavior. */
-  :root{color-scheme:light;--bg:#f5f7fa;--panel:#fff;--panel-2:#f7f9fc;--line:#e7ecf2;--line-2:#d9e1eb;--text:#202d40;--muted:#66758b;--muted-2:#7a8799;--accent:#4275e8;--accent-2:#8b74da;--green:#19947c;--red:#d95566;--amber:#b47c18;--radius:18px;--shadow:0 18px 60px rgba(32,53,88,.08)}
-  body{background:var(--bg);font-size:14px;-webkit-font-smoothing:antialiased}
-  .sidebar{width:220px;flex-basis:220px;background:#fff;padding:28px 16px 18px}
-  .brand-row{padding:0 8px 32px;gap:12px}.brand-row .logo{width:38px;height:38px}
-  .brand-row .name{font-size:16px;letter-spacing:.3px}.brand-row .sub{margin-top:3px;letter-spacing:1px;font-size:10px}
-  nav{gap:7px}nav a{padding:12px 14px;border-radius:12px;color:#718096}nav a svg{width:19px;height:19px}
-  nav a:hover{background:#f5f8fd}nav a.active{background:#edf3ff;border-color:transparent;color:#386bdb;box-shadow:inset 3px 0 #4f80eb}
-  .sidebar-foot{padding:18px 8px 0}.main{padding:32px 36px 56px;max-width:1720px;margin:0 auto}
-  .topbar{padding-bottom:24px;margin-bottom:26px;border-bottom:1px solid var(--line)}.topbar h2{font-size:23px;font-weight:700;letter-spacing:-.5px}.crumb{margin-top:5px}
-  .pill{background:#fff;padding:8px 13px}.icon-btn{width:38px;height:38px}.icon-btn:hover{border-color:#a9bee7;background:#f1f5fe}
-  .dashboard-intro{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}
-  .eyebrow{font-size:10px;font-weight:700;letter-spacing:2.5px;color:#7187a5;margin-bottom:7px}
-  .dashboard-intro h1{font-size:27px;line-height:1.3;letter-spacing:-.7px;margin:0 0 8px}.dashboard-intro p{margin:0;color:var(--muted);font-size:13px}
-  .intro-tag{color:#628170;background:#eaf3ed;border:1px solid #dceadf;border-radius:9px;padding:8px 12px;font-size:12px;white-space:nowrap;display:flex;gap:7px;align-items:center}
-  .intro-tag svg{width:15px;height:15px}
-  .grid{gap:20px}.card{background:#fff;padding:23px;border-color:#e6ebf2;box-shadow:0 3px 12px rgba(35,56,86,.025)}
-  .card h3{font-size:13px;letter-spacing:0;color:#637189}.card-head{margin-bottom:22px;min-height:22px}.card-head h3{font-size:14px;color:#35445b}
-  .metric-grid{margin-bottom:24px!important}.metric-card{position:relative;overflow:hidden;padding-top:25px;min-height:169px}
-  .metric-card h3{padding-right:42px;margin-bottom:17px}.metric-icon{position:absolute;right:20px;top:20px;width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--metric-bg);color:var(--metric-color)}
-  .metric-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-  .metric-card:after{content:"";position:absolute;left:23px;right:23px;bottom:0;height:3px;background:var(--metric-bg);border-radius:4px 4px 0 0}
-  .metric-steps{--metric-bg:#eaf1ff;--metric-color:#4f80eb}.metric-sleep{--metric-bg:#f0ecfc;--metric-color:#9275d3}.metric-heart{--metric-bg:#fff0ef;--metric-color:#df7e80}.metric-workouts{--metric-bg:#e7f4ef;--metric-color:#39a58b}
-  .stat{font-size:32px;line-height:1.25;letter-spacing:-1px;font-variant-numeric:tabular-nums;font-weight:650}.stat small{font-size:12px;letter-spacing:0;margin-left:6px}.stat-sub{margin-top:12px;font-size:11px}
-  .trend-grid{margin-bottom:20px!important}.chart{height:180px}.axis{margin-top:12px;font-variant-numeric:tabular-nums}.legend{margin-top:15px;gap:16px;color:var(--muted)}
-  .btn{background:#4779e9;box-shadow:0 3px 7px rgba(66,117,232,.12);border-radius:10px}.btn.ghost{box-shadow:none;background:#f8faff}.btn.ghost:hover{border-color:#b5c7e7}.btn.danger{background:#d95566}
-  .input,select,input[type=date]{background:#fafbfd}.seg button.active{background:#fff;color:#386bdb;box-shadow:0 1px 5px #dce3ee}
-  th{background:#f6f8fc;color:#65748a}td{color:#3f5068;border-bottom-color:#edf0f5}tr:hover td{background:#f6f9ff}.kv .v{color:#3f5068}
-  pre.code{background:#f5f7fc;color:#465b78;border-color:#e0e6ef}.warn-box{background:#fff9ec;color:#906b21;border-color:#f0e0b8}
-  .toast{background:#fff}.banner{background:#fff1f2;border-color:#f3d5da;color:#b34253}.empty{padding:50px 20px;color:#8491a3;font-size:13px}
-  .workout-row{padding:15px 0;border-bottom:1px solid var(--line)}.workout-row:last-child{border-bottom:0}
-  .login-view{background:radial-gradient(ellipse at 22% 20%,#e7eefb,transparent 55%),radial-gradient(ellipse at 80% 80%,#e7f3ef,transparent 55%),#f5f7fa}
-  .login-card{background:#fff;border-radius:24px;padding:38px;max-width:440px}.login-brand{margin-bottom:32px}.login-card .hint{line-height:1.8}.login-foot{line-height:1.8}
-  :focus-visible{outline:3px solid #8eafea;outline-offset:3px}button:focus-visible,a:focus-visible{outline:3px solid #8eafea;outline-offset:3px}
-  @media(min-width:1500px){.main{padding:40px 48px 60px}.chart{height:200px}}
-  @media(max-width:1150px){.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}.main{padding:26px 24px}.sidebar{width:190px;flex-basis:190px}.top-actions{gap:7px}}
-  @media(max-width:980px){.cols-2,.cols-3{grid-template-columns:1fr}.dashboard-intro h1{font-size:24px}}
-  @media(max-width:760px){.sidebar{width:100%;height:auto;position:sticky;top:0;z-index:20;display:block;padding:14px 16px 0;overflow:visible;box-shadow:0 3px 12px rgba(35,56,86,.04)}.brand-row{padding:0 0 12px}.brand-row .logo{width:30px;height:30px}.brand-row .sub{display:none}nav{overflow-x:auto;gap:4px;padding:0 0 10px;scrollbar-width:thin}nav a{padding:9px 12px;flex-shrink:0;font-size:12px;gap:6px}nav a svg{width:15px;height:15px}.main{padding:22px 16px 36px}.topbar{margin-bottom:22px;padding-bottom:18px;gap:8px}.topbar h2{font-size:20px}.top-actions{gap:6px}.pill{font-size:10px;padding:7px 9px;gap:6px}.icon-btn{width:32px;height:32px}.dashboard-intro{align-items:flex-start;margin-bottom:20px}.dashboard-intro h1{font-size:23px}.dashboard-intro p{font-size:12px;max-width:250px}.intro-tag{display:none}.grid{gap:12px}.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:18px}.metric-card{min-height:158px}.metric-icon{right:14px;top:16px;width:29px;height:29px}.metric-icon svg{width:17px;height:17px}.metric-card h3{font-size:11px;padding-right:28px}.stat{font-size:25px}.stat-sub{font-size:10px}.metric-card:after{left:18px;right:18px}.card-head{gap:8px}.card-head h3{font-size:13px}.chart{height:165px}.kv{grid-template-columns:1fr;gap:5px}.kv .v{margin-bottom:8px}.copy-row{flex-wrap:wrap}.toolbar .input,.toolbar select{max-width:100%}.banner{flex-wrap:wrap}.login-card{padding:28px 24px}.topbar .crumb{font-size:11px}}
-  @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+''' + _ADMIN_CSS + r'''
 </style>
 </head>
 <body>
@@ -204,116 +19,188 @@ ADMIN_HTML = r'''<!doctype html>
 <div id="loginView" class="login-view">
   <div class="login-card">
     <div class="login-brand">
-      <svg class="logo" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="#1b2740"/><path d="M14 30V20l6 6 4-9 4 9 6-6v10" stroke="#4f8cff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="31" cy="17" r="2.4" fill="#34d399"/></svg>
-      <div><h1>小米健康桥</h1><p>Mi Fitness · Muse Data Bridge</p></div>
+      <img class="logo" src="/favicon.png?v=2" alt="">
+      <div><strong>小米健康桥</strong><small>Health Bridge</small></div>
     </div>
-    <h2>管理后台</h2>
-    <div class="hint">首次登录使用服务器 <span class="mono">/opt/health-bridge/.env</span> 里的 <span class="mono">ADMIN_PASSWORD</span>，登录后可在「设置」里修改。</div>
-    <div class="field">
-      <input id="password" class="input" aria-label="管理密码" type="password" placeholder="管理密码" autocomplete="current-password">
-      <button id="btnLogin" class="btn">登录</button>
-    </div>
-    <div id="loginError" class="error"></div>
-    <div class="login-foot">凭据只保存在你的服务器，浏览器只持有一个 12 小时有效的签名 Cookie。</div>
+    <h1>登录管理后台</h1>
+    <form id="loginForm">
+      <label for="password">管理密码</label>
+      <input id="password" class="input" type="password" autocomplete="current-password" required>
+      <button id="btnLogin" class="btn" type="submit">登录</button>
+      <div id="loginError" class="error" role="alert"></div>
+    </form>
+    <p class="login-foot">首次登录使用服务器 <code>/opt/health-bridge/.env</code> 中的 <code>ADMIN_PASSWORD</code>，登录后可在「设置」中修改。</p>
   </div>
 </div>
 
 <div id="appView" class="app hidden">
-  <aside class="sidebar">
-    <div class="brand-row">
-      <svg class="logo" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="#1b2740"/><path d="M14 30V20l6 6 4-9 4 9 6-6v10" stroke="#4f8cff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="31" cy="17" r="2.4" fill="#34d399"/></svg>
-      <div><div class="name">小米健康桥</div><div class="sub">Health Bridge</div></div>
-    </div>
-    <nav>
-      <a href="#/overview" data-nav="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>概览</a>
-      <a href="#/data" data-nav="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>数据</a>
-      <a href="#/sync" data-nav="sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>同步</a>
-      <a href="#/xiaomi" data-nav="xiaomi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.2-3.5 3.8-5.2 7-5.2s5.8 1.7 7 5.2"/></svg>小米账号</a>
-      <a href="#/backups" data-nav="backups"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Z"/><path d="M4 8V6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2"/></svg>备份</a>
-      <a href="#/settings" data-nav="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>设置</a>
-    </nav>
-    <div class="sidebar-foot">
-      <span id="sideDot" class="dot warn"></span>
-      <span id="sideStatus">连接中</span>
-      <span id="sideVer" class="ver"></span>
-    </div>
-  </aside>
-
-  <main class="main">
-    <header class="topbar">
-      <div>
-        <h2 id="pageTitle">概览</h2>
-        <div id="pageCrumb" class="crumb">健康数据总览</div>
-      </div>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <a class="brand-row" href="#/overview">
+        <img class="logo" src="/favicon.png?v=2" alt="">
+        <span>小米健康桥</span>
+      </a>
+      <nav class="site-nav" aria-label="管理后台导航">
+        <div class="nav-group nav-primary">
+          <a href="#/overview" data-nav="overview"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>概览</a>
+          <a href="#/sleep" data-nav="sleep"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/></svg>睡眠</a>
+          <a href="#/data" data-nav="data"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>数据</a>
+        </div>
+        <button id="navMore" class="nav-more-toggle" type="button" aria-expanded="false" aria-controls="navTools">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          更多
+        </button>
+        <div id="navTools" class="nav-group nav-tools">
+          <div class="mobile-menu-heading">管理</div>
+          <a href="#/sync" data-nav="sync"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>同步</a>
+          <a href="#/xiaomi" data-nav="xiaomi"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.2-3.5 3.8-5.2 7-5.2s5.8 1.7 7 5.2"/></svg>小米账号</a>
+          <a href="#/backups" data-nav="backups"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Z"/><path d="M4 8V6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2"/></svg>备份</a>
+          <a href="#/settings" data-nav="settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>设置</a>
+          <div class="mobile-menu-actions">
+            <button class="btn ghost" type="button" data-admin-action="refresh">刷新数据</button>
+            <button class="btn ghost" type="button" data-admin-action="logout">退出登录</button>
+          </div>
+        </div>
+      </nav>
       <div class="top-actions">
         <span id="syncPill" class="pill"><span class="dot warn"></span>加载中</span>
-        <button id="btnRefresh" class="icon-btn" title="刷新" aria-label="刷新数据"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button>
-        <button id="btnLogout" class="icon-btn" title="退出" aria-label="退出登录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h10"/></svg></button>
+        <button id="btnRefresh" class="icon-btn" type="button" data-admin-action="refresh" title="刷新" aria-label="刷新数据"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button>
+        <button id="btnLogout" class="icon-btn" type="button" data-admin-action="logout" title="退出" aria-label="退出登录"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h10"/></svg></button>
       </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <header class="page-heading" data-page="overview">
+      <h1 id="pageTitle">健康概览</h1>
+      <div id="pageCrumb" class="crumb">近 30 天的健康趋势</div>
     </header>
 
     <section id="page-overview" class="page">
-      <div class="dashboard-intro">
-        <div><div class="eyebrow">YOUR HEALTH, CONNECTED</div><h1>每一天，都更了解自己。</h1><p>步数、睡眠与运动，让健康变化清晰可见。</p></div>
-        <div class="intro-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg>个人健康数据空间</div>
-      </div>
       <div id="overviewBanner" class="banner hidden">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:#f87171"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
         <span>小米登录已失效，数据暂停更新。</span>
         <button class="btn sm" onclick="location.hash='#/xiaomi'">重新登录</button>
       </div>
 
-      <div class="grid cols-4 metric-grid">
-        <div class="card metric-card metric-steps"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m13 4-3 5 4 3-2 8M10 9 6 12l-3-1M14 7l3 4h4M7 21l3-5"/><circle cx="16" cy="3" r="1.5"/></svg></div><h3>最近步数</h3><div id="statSteps" class="stat">—</div><div id="statStepsSub" class="stat-sub">—</div></div>
-        <div class="card metric-card metric-sleep"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/></svg></div><h3>最近睡眠</h3><div id="statSleep" class="stat">—</div><div id="statSleepSub" class="stat-sub">—</div></div>
-        <div class="card metric-card metric-heart"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 13c5-7-4-13-8-6-4-7-13-1-8 6l8 8Z"/><path d="M3 12h5l2-3 3 6 2-3h6"/></svg></div><h3>静息心率</h3><div id="statHr" class="stat">—</div><div id="statHrSub" class="stat-sub">—</div></div>
-        <div class="card metric-card metric-workouts"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 4-3 3 13 13 3-3ZM4 14l6 6M14 4l6 6M2 17l5 5M17 2l5 5"/></svg></div><h3>近 7 天运动</h3><div id="statWorkouts" class="stat">—</div><div id="statWorkoutsSub" class="stat-sub">—</div></div>
-      </div>
-
-      <div class="grid cols-2 trend-grid">
-        <div class="card">
-          <div class="card-head"><h3>步数 · 近 30 天</h3><span id="stepsMeta" class="muted" style="font-size:12px"></span></div>
-          <div id="chartSteps"></div>
-          <div class="axis"><span id="stepsFrom"></span><span id="stepsTo"></span></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h3>睡眠结构 · 近 30 天</h3><span class="muted" style="font-size:12px">深睡 / 浅睡 / REM / 清醒</span></div>
+      <div class="grid overview-layout">
+        <article class="card feature-panel steps-panel">
+          <div class="feature-head">
+            <h2>最近步数</h2>
+            <div id="statSteps" class="stat">—</div>
+            <div id="statStepsSub" class="stat-sub"></div>
+          </div>
+          <div class="feature-chart">
+            <div class="card-head"><h3>近 30 天步数</h3><span id="stepsMeta" class="chart-note"></span></div>
+            <div id="chartSteps"></div>
+          </div>
+        </article>
+        <article class="card detail-panel sleep-preview">
+          <div class="card-head">
+            <h2 class="detail-title"><span class="metric-icon sleep-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/></svg></span>主睡眠</h2>
+            <a class="btn ghost sm" href="#/sleep">查看睡眠 <span aria-hidden="true">↗</span></a>
+          </div>
+          <div class="detail-reading">
+            <div id="statSleep" class="stat">—</div>
+            <div id="statSleepSub" class="stat-sub"></div>
+          </div>
+          <div class="chart-caption">近 30 天分期 · 小时</div>
           <div id="chartSleep"></div>
-          <div class="axis"><span id="sleepFrom"></span><span id="sleepTo"></span></div>
-          <div class="legend"><span><i style="background:#7f91db"></i>深睡</span><span><i style="background:#c4d4f7"></i>浅睡</span><span><i style="background:#b49cdd"></i>REM</span><span><i style="background:#e2e7ef"></i>清醒</span></div>
+          <div class="legend"><span><i style="background:var(--deep)"></i>深睡</span><span><i style="background:var(--light)"></i>浅睡</span><span><i style="background:var(--rem)"></i>REM</span><span><i style="background:var(--awake)"></i>清醒</span></div>
+        </article>
+        <article class="card detail-panel heart-preview">
+          <div class="card-head">
+            <h2 class="detail-title"><span class="metric-icon heart-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 13c5-7-4-13-8-6-4-7-13-1-8 6l8 8Z"/><path d="M3 12h5l2-3 3 6 2-3h6"/></svg></span>静息心率</h2>
+          </div>
+          <div class="detail-reading">
+            <div id="statHr" class="stat">—</div>
+            <div id="statHrSub" class="stat-sub"></div>
+          </div>
+          <div class="chart-caption"><span>近 30 天 · bpm</span><span id="hrMeta"></span></div>
+          <div id="chartHr"></div>
+        </article>
+        <article class="card activity-panel">
+          <div class="card-head"><h2>运动记录</h2><a class="btn ghost sm" href="#/data">查看数据 <span aria-hidden="true">↗</span></a></div>
+          <div class="activity-body">
+            <div class="activity-summary">
+              <span class="metric-icon workout-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 4-3 3 13 13 3-3ZM4 14l6 6M14 4l6 6M2 17l5 5M17 2l5 5"/></svg></span>
+              <h3>近 7 天运动</h3>
+              <div id="statWorkouts" class="stat">—</div><div id="statWorkoutsSub" class="stat-sub"></div>
+            </div>
+            <div id="recentWorkouts"></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="page-sleep" class="page hidden">
+      <div class="sleep-filters">
+        <span id="sleepPeriod" class="sleep-period"></span>
+        <div class="seg" id="sleepRange" role="group" aria-label="时间范围">
+          <button data-days="7" aria-pressed="false">7 天</button>
+          <button data-days="30" class="active" aria-pressed="true">30 天</button>
+          <button data-days="90" aria-pressed="false">90 天</button>
         </div>
       </div>
-
-      <div class="grid cols-2">
-        <div class="card">
-          <div class="card-head"><h3>静息心率 · 近 30 天</h3><span id="hrMeta" class="muted" style="font-size:12px"></span></div>
-          <div id="chartHr"></div>
-          <div class="axis"><span id="hrFrom"></span><span id="hrTo"></span></div>
+      <p id="sleepStatus" class="sleep-subtitle" role="status"></p>
+      <div id="sleepResults" class="hidden">
+        <div class="grid sleep-layout">
+          <article class="card feature-panel sleep-feature">
+            <div class="card-head">
+              <div><h2>每日睡眠时长</h2><span class="card-kicker">小时</span></div>
+              <div class="legend"><span><i style="background:var(--main-sleep)"></i>主睡眠</span><span><i style="background:var(--nap)"></i>小睡</span></div>
+            </div>
+            <div id="sleepDurationChart"></div>
+          </article>
+          <article class="card sleep-summary">
+            <div class="sleep-total">
+              <h2>总时长（含小睡）</h2>
+              <div id="sleepCombinedTotal" class="stat">—</div>
+              <div id="sleepCombinedMeta" class="stat-sub"></div>
+            </div>
+            <div class="sleep-metric">
+              <h3>主睡眠时长</h3><div id="sleepMainTotal" class="stat">—</div><div id="sleepMainMeta" class="stat-sub"></div>
+            </div>
+            <div class="sleep-metric">
+              <h3>小睡时长</h3><div id="sleepNapTotal" class="stat">—</div><div id="sleepNapMeta" class="stat-sub"></div>
+            </div>
+          </article>
         </div>
-        <div class="card">
-          <div class="card-head"><h3>最近运动</h3><button class="btn ghost sm" onclick="location.hash='#/data'">查看数据</button></div>
-          <div id="recentWorkouts"></div>
+        <div class="grid sleep-records sleep-section">
+          <div class="card">
+            <div class="card-head"><h2>每日记录</h2></div>
+            <div id="sleepDailyTable" class="table-wrap"></div>
+            <p id="sleepCoverage" class="sleep-subtitle"></p>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>小睡明细</h2></div>
+            <div id="sleepNapTable" class="table-wrap"></div>
+          </div>
         </div>
       </div>
     </section>
 
     <section id="page-data" class="page hidden">
-      <div class="card" style="margin-bottom:14px">
-        <div class="toolbar">
-          <select id="dataDomain" class="input"></select>
-          <div class="seg" id="dataRangeSeg">
-            <button data-range="7" class="active">7 天</button>
-            <button data-range="30">30 天</button>
-            <button data-range="90">90 天</button>
-            <button data-range="365">365 天</button>
+      <form id="dataFilters" class="card data-filters">
+        <label class="filter-field">指标<select id="dataDomain" class="input"></select></label>
+        <div class="filter-field">
+          <span id="dataRangeLabel">快捷范围</span>
+          <div class="seg" id="dataRangeSeg" role="group" aria-labelledby="dataRangeLabel">
+            <button type="button" data-range="7" class="active" aria-pressed="true">7 天</button>
+            <button type="button" data-range="30" aria-pressed="false">30 天</button>
+            <button type="button" data-range="90" aria-pressed="false">90 天</button>
+            <button type="button" data-range="365" aria-pressed="false">365 天</button>
           </div>
-          <input id="dataFrom" class="input" type="date">
-          <input id="dataTo" class="input" type="date">
-          <button id="btnLoadData" class="btn">查询</button>
-          <span class="grow"></span>
+        </div>
+        <label class="filter-field">开始日期<input id="dataFrom" class="input" type="date"></label>
+        <label class="filter-field">结束日期<input id="dataTo" class="input" type="date"></label>
+        <button id="btnLoadData" class="btn" type="submit">查询</button>
+      </form>
+      <div class="card">
+        <div class="card-head">
+          <div><h2>查询结果</h2><div id="dataNotes" class="card-kicker"></div></div>
           <button id="btnExport" class="btn ghost">导出 CSV</button>
         </div>
-        <div id="dataNotes" class="muted" style="font-size:12px;margin-bottom:10px"></div>
         <div id="dataTable" class="table-wrap"></div>
       </div>
     </section>
@@ -362,7 +249,7 @@ ADMIN_HTML = r'''<!doctype html>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>各数据域状态</h3><span class="muted" style="font-size:12px">来自 sync_state</span></div>
+        <div class="card-head"><h3>各数据域状态</h3></div>
         <div id="domainTable" class="table-wrap"></div>
       </div>
     </section>
@@ -470,7 +357,7 @@ ADMIN_HTML = r'''<!doctype html>
   </main>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite"></div>
 <div id="modal" class="modal hidden">
   <div class="modal-card">
     <h3 id="modalTitle">确认操作</h3>
@@ -487,7 +374,7 @@ ADMIN_HTML = r'''<!doctype html>
   "use strict";
   var $ = function(s){ return document.querySelector(s); };
   var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
-  var state = { overview: null, page: "overview", summaryMarkdown: "", token: "", prompt: "" };
+  var state = { overview: null, page: "overview", summaryMarkdown: "", token: "", prompt: "", sleepDays: 30, sleepRequest: 0 };
 
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
   function fmtNum(v, digits){ if(v == null || v === "") return "—"; var n = Number(v); if(isNaN(n)) return esc(v); return n.toLocaleString("zh-CN", {maximumFractionDigits: digits == null ? 0 : digits}); }
@@ -547,71 +434,119 @@ ADMIN_HTML = r'''<!doctype html>
   }
 
   /* ---------------- charts ---------------- */
-  function gridLines(h){
-    var out = "";
-    [0.25,0.5,0.75].forEach(function(p){
-      out += '<line x1="0" y1="' + (h*p).toFixed(1) + '" x2="600" y2="' + (h*p).toFixed(1) + '" stroke="#edf1f6" stroke-width="1"/>';
-    });
-    return out;
+  var PLOT_WIDTH = 600, PLOT_HEIGHT = 140, TICK_COUNT = 4;
+  var SLEEP_STAGES = [
+    ["deep_min", "深睡", "deep"], ["light_min", "浅睡", "light"],
+    ["rem_min", "REM", "rem"], ["awake_min", "清醒", "awake"]
+  ];
+
+  function chartFrame(dates, label, marks, min, max, formatTick){
+    var ticks = "", grid = "";
+    for(var i = 0; i <= TICK_COUNT; i++){
+      var y = PLOT_HEIGHT * i / TICK_COUNT;
+      ticks += '<span>' + formatTick(max - (max - min) * i / TICK_COUNT) + '</span>';
+      grid += '<line class="chart-grid" x1="0" y1="' + y + '" x2="' + PLOT_WIDTH + '" y2="' + y + '"/>';
+    }
+    var dateIndexes = Array.from(new Set([0, 0.25, 0.5, 0.75, 1].map(function(fraction){
+      return Math.round((dates.length - 1) * fraction);
+    })));
+    var datesHtml = dateIndexes.map(function(index, i){
+      var extra = dateIndexes.length === 5 && (i === 1 || i === 3);
+      return '<span' + (extra ? ' class="intermediate"' : "") + '>' + esc(dates[index].slice(5).replace("-", "/")) + '</span>';
+    }).join("");
+    return '<div class="plot-grid"><div class="chart-y" aria-hidden="true">' + ticks + '</div>' +
+      '<svg class="chart" role="img" aria-label="' + esc(label) + '" viewBox="0 0 ' + PLOT_WIDTH + ' ' + PLOT_HEIGHT +
+      '" preserveAspectRatio="none">' + grid + marks + '</svg><div class="chart-x">' + datesHtml + '</div></div>';
   }
-  function barChart(values, color){
-    var W = 600, H = 150, max = 1;
-    values.forEach(function(v){ if(v != null && v > max) max = v; });
-    var n = values.length || 1, bw = W / n;
-    var bars = "";
-    values.forEach(function(v, i){
-      var hh = v == null ? 0 : Math.max(2, (v/max) * (H - 16));
-      var x = i * bw + bw * 0.18, w = Math.max(1, bw * 0.64), y = H - 8 - hh;
-      bars += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="2.5" fill="' + (v == null ? "#202938" : color) + '"><title>' + (v == null ? "无数据" : fmtNum(v)) + '</title></rect>';
-    });
-    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + gridLines(H) + bars + '</svg>';
+
+  function chartEmpty(message){
+    return '<div class="empty chart-empty">' + esc(message) + '</div>';
   }
-  function stackedSleep(sleep){
-    var W = 600, H = 150, n = sleep.dates.length || 1, bw = W / n;
-    var colors = { deep: "#7f91db", light: "#c4d4f7", rem: "#b49cdd", awake: "#e2e7ef" };
-    var bars = "";
-    sleep.dates.forEach(function(d, i){
-      var total = (sleep.series.sleep_deep_min[i] || 0) + (sleep.series.sleep_light_min[i] || 0) + (sleep.series.sleep_rem_min[i] || 0) + (sleep.series.sleep_awake_min[i] || 0);
-      if(!total){ return; }
-      var y = H - 8, x = i*bw + bw*0.18, w = Math.max(1, bw*0.64);
-      ["deep","light","rem","awake"].forEach(function(k){
-        var key = {deep:"sleep_deep_min", light:"sleep_light_min", rem:"sleep_rem_min", awake:"sleep_awake_min"}[k];
-        var v = sleep.series[key][i] || 0; if(!v) return;
-        var hh = (v/540) * (H - 16);
-        y -= hh;
-        bars += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" fill="' + colors[k] + '"><title>' + d + " " + k + ": " + Math.round(v) + " 分钟</title></rect>";
+
+  function chartBar(x, y, width, height, color, title, radius){
+    return '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + width.toFixed(2) +
+      '" height="' + height.toFixed(2) + '" rx="' + radius + '" fill="var(--' + color + ')"><title>' +
+      esc(title) + '</title></rect>';
+  }
+
+  function stepsChart(dates, values){
+    var recorded = values.filter(function(value){ return value != null; });
+    if(!recorded.length){ return chartEmpty("暂无步数记录"); }
+    var max = Math.max(4000, Math.ceil(Math.max(...recorded) / 4000) * 4000);
+    var slot = PLOT_WIDTH / dates.length;
+    var bars = values.map(function(value, index){
+      if(value == null){ return ""; }
+      var h = value === 0 ? 1 : value / max * PLOT_HEIGHT;
+      return chartBar(slot * (index + 0.15), PLOT_HEIGHT - h, slot * 0.7, h, "steps",
+        dates[index] + " · " + fmtNum(value) + " 步", 1.25);
+    }).join("");
+    return chartFrame(dates, "每日步数", bars, 0, max, fmtNum);
+  }
+
+  function sleepAxisMax(minutes){
+    return Math.max(480, Math.ceil(minutes / 240) * 240);
+  }
+
+  function stackedSleep(dates, primaryByDate){
+    var max = sleepAxisMax(Math.max(...dates.map(function(day){
+      var main = primaryByDate.get(day);
+      return SLEEP_STAGES.reduce(function(sum, stage){ return sum + (main?.[stage[0]] || 0); }, 0);
+    })));
+    var slot = PLOT_WIDTH / dates.length;
+    var bars = dates.map(function(day, i){
+      var main = primaryByDate.get(day);
+      if(!main){ return ""; }
+      var y = PLOT_HEIGHT;
+      return SLEEP_STAGES.map(function(stage){
+        var value = main[stage[0]];
+        if(!value){ return ""; }
+        var h = value / max * PLOT_HEIGHT;
+        y -= h;
+        return chartBar(slot * (i + 0.18), y, slot * 0.64, h, stage[2],
+          day + " · " + stage[1] + " " + sleepMinutes(value), 0);
+      }).join("");
+    }).join("");
+    return bars ? chartFrame(dates, "每日主睡眠分期", bars, 0, max, function(v){ return v / 60; })
+      : chartEmpty("暂无主睡眠分期");
+  }
+
+  function heartChart(dates, values){
+    var recorded = values.filter(function(value){ return value != null; });
+    if(!recorded.length){ return chartEmpty("暂无静息心率记录"); }
+    var min = Math.max(0, Math.floor(Math.min(...recorded)) - 1);
+    var step = Math.max(2, Math.ceil((Math.max(...recorded) + 1 - min) / TICK_COUNT));
+    var max = min + step * TICK_COUNT, slot = PLOT_WIDTH / dates.length;
+    var segments = [], current = [];
+    values.forEach(function(value, index){
+      if(value == null){
+        current = [];
+        return;
+      }
+      if(!current.length){ segments.push(current); }
+      current.push({
+        x: (slot * (index + 0.5)).toFixed(2),
+        y: (PLOT_HEIGHT * (max - value) / (max - min)).toFixed(2),
+        title: dates[index] + " · " + fmtNum(value, 1) + " bpm"
       });
     });
-    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + gridLines(H) + bars + '</svg>';
-  }
-  function lineChart(values, color){
-    var W = 600, H = 150, pts = [], vals = values.filter(function(v){ return v != null; });
-    if(!vals.length){ return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '"><text x="300" y="76" text-anchor="middle" fill="#5f6b7f" font-size="13">暂无数据</text></svg>'; }
-    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
-    var span = (max - min) || 1, pad = (H - 26) / 2, n = values.length;
-    var d = "", area = "";
-    values.forEach(function(v, i){
-      if(v == null){ return; }
-      var x = (i/(n-1)) * (W - 8) + 4;
-      var y = H - 22 - ((v - min)/span) * (H - 40);
-      d += (d ? " L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
-      pts.push([x, y]);
-    });
-    if(pts.length > 1){
-      area = "M" + pts[0][0].toFixed(1) + " " + (H-22) + " L" + pts.map(function(p){ return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" L") + " L" + pts[pts.length-1][0].toFixed(1) + " " + (H-22) + " Z";
-    }
-    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + gridLines(H) +
-      '<path d="' + area + '" fill="' + color + '" opacity="0.10"/>' +
-      '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
-      pts.map(function(p){ return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2" fill="' + color + '"/>'; }).join("") +
-      '<text x="6" y="12" fill="#5f6b7f" font-size="11">' + fmtNum(max,1) + '</text>' +
-      '<text x="6" y="' + (H-8) + '" fill="#5f6b7f" font-size="11">' + fmtNum(min,1) + '</text>' +
-      '</svg>';
+    var marks = segments.map(function(segment){
+      var points = segment.map(function(point){ return point.x + " " + point.y; }).join(" L");
+      var area = "M" + segment[0].x + " " + PLOT_HEIGHT + " L" + points +
+        " L" + segment[segment.length - 1].x + " " + PLOT_HEIGHT + " Z";
+      return '<path d="' + area + '" fill="var(--heart)" opacity=".09"/>' +
+        '<path class="chart-line" d="M' + points + '" fill="none" stroke="var(--heart)" stroke-width="2" stroke-linejoin="round"/>' +
+        segment.map(function(point){
+          return '<ellipse cx="' + point.x + '" cy="' + point.y + '" rx="2.6" ry="2.4" fill="var(--heart)"><title>' +
+            esc(point.title) + '</title></ellipse>';
+        }).join("");
+    }).join("");
+    return chartFrame(dates, "每日静息心率", marks, min, max, fmtNum);
   }
 
   /* ---------------- pages ---------------- */
   var PAGE_META = {
-    overview: ["概览", "健康数据总览"],
+    overview: ["健康概览", "近 30 天的健康趋势"],
+    sleep: ["睡眠", "主睡眠与小睡记录"],
     data: ["数据", "按日期与指标浏览，支持导出 CSV"],
     sync: ["同步", "手动同步与各数据域状态"],
     xiaomi: ["小米账号", "扫码登录与会话状态"],
@@ -622,11 +557,10 @@ ADMIN_HTML = r'''<!doctype html>
   function showLogin(){ $("#loginView").classList.remove("hidden"); $("#appView").classList.add("hidden"); }
   function showApp(){ $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden"); }
 
-  function setStatus(ok, text){
-    var dot = $("#sideDot"); var pill = $("#syncPill");
-    dot.className = "dot " + (ok ? "" : "bad");
-    $("#sideStatus").textContent = text;
-    pill.innerHTML = '<span class="dot ' + (ok ? "" : "bad") + '"></span>' + esc(text);
+  function setStatus(kind, text){
+    var pill = $("#syncPill");
+    var status = '<span class="dot ' + kind + '"></span>' + esc(text);
+    if(pill.innerHTML !== status){ pill.innerHTML = status; }
   }
 
   function renderOverview(data){
@@ -634,46 +568,56 @@ ADMIN_HTML = r'''<!doctype html>
     var s = data.session, o = data.summary.overview, t = data.timeline;
     var daily = data.summary.daily || [];
     var last = daily.length ? daily[daily.length-1] : null;
+    var primary = (data.sleep?.days || []).filter(function(row){ return row.main; });
+    var latestSleep = primary[primary.length - 1];
     $("#overviewBanner").classList.toggle("hidden", !s.expired);
 
-    $("#statSteps").innerHTML = (last && last.steps != null ? fmtNum(last.steps) : "—") + '<small>步</small>';
-    $("#statStepsSub").textContent = last ? (last.date + " · 距离 " + fmtFloat((last.distance_m||0)/1000,2) + " km") : "暂无数据";
-    $("#statSleep").innerHTML = last && last.sleep_total_min != null ? fmtMin(last.sleep_total_min) : "—";
-    $("#statSleepSub").textContent = last ? ("深睡 " + fmtMin(last.sleep_deep_min) + " · REM " + fmtMin(last.sleep_rem_min)) : "暂无数据";
+    $("#statSteps").innerHTML = last?.steps != null ? fmtNum(last.steps) + '<small>步</small>' : "—";
+    $("#statStepsSub").textContent = last?.steps != null
+      ? last.date + (last.distance_m == null ? "" : " · " + fmtFloat(last.distance_m/1000,2) + " km")
+      : "暂无数据";
+    $("#statSleep").innerHTML = durationStat(latestSleep?.main.asleep_min);
+    $("#statSleepSub").textContent = latestSleep ? (latestSleep.date + " · 深睡 " + sleepMinutes(latestSleep.main.deep_min)) : "暂无主睡眠分段";
     $("#statHr").innerHTML = last && last.hr_resting != null ? fmtNum(last.hr_resting) + '<small>bpm</small>' : "—";
-    $("#statHrSub").textContent = last ? (last.date + " · 日均 " + fmtNum(last.hr_avg)) : "暂无数据";
+    $("#statHrSub").textContent = last?.hr_resting != null
+      ? last.date + (last.hr_avg == null ? "" : " · 日均 " + fmtNum(last.hr_avg))
+      : "暂无数据";
     $("#statWorkouts").innerHTML = fmtNum(o.workout_count) + '<small>次</small>';
     $("#statWorkoutsSub").textContent = o.workout_count
       ? (o.workout_distance_m ? ("合计 " + fmtFloat(o.workout_distance_m/1000,1) + " km") : "近 7 天")
       : ((data.recent_workouts && data.recent_workouts.length) ? ("最近一次 " + (data.recent_workouts[0].date || "")) : "暂无运动记录");
 
-    $("#chartSteps").innerHTML = barChart(t.series.steps, "#4f8cff");
-    $("#chartSleep").innerHTML = stackedSleep(t);
-    $("#chartHr").innerHTML = lineChart(t.series.hr_resting, "#db858c");
-    $("#stepsMeta").textContent = "合计 " + fmtNum(t.series.steps.reduce(function(a,b){ return a + (b||0); }, 0)) + " 步";
+    $("#chartSteps").innerHTML = stepsChart(t.dates, t.series.steps);
+    var primaryByDate = new Map(primary.map(function(row){ return [row.date, row.main]; }));
+    $("#chartSleep").innerHTML = stackedSleep(t.dates, primaryByDate);
+    $("#chartHr").innerHTML = heartChart(t.dates, t.series.hr_resting);
+    var stepDays = t.series.steps.filter(function(v){ return v != null; });
+    $("#stepsMeta").textContent = stepDays.length ? "合计 " + fmtNum(stepDays.reduce(function(a,b){ return a + b; }, 0)) + " 步" : "";
     var hrVals = t.series.hr_resting.filter(function(v){ return v != null; });
     $("#hrMeta").textContent = hrVals.length ? ("均值 " + fmtFloat(hrVals.reduce(function(a,b){ return a+b; },0)/hrVals.length,0) + " bpm") : "";
-    ["steps","sleep","hr"].forEach(function(k){
-      $("#" + k + "From").textContent = t.from;
-      $("#" + k + "To").textContent = t.to;
-    });
+    if(state.page === "overview"){ $("#pageCrumb").textContent = t.from + " 至 " + t.to; }
 
     var wl = data.recent_workouts || [];
     if(!wl.length){ $("#recentWorkouts").innerHTML = '<div class="empty">暂无运动记录</div>'; }
     else {
+      var icon = $(".activity-summary .workout-glyph").outerHTML;
       $("#recentWorkouts").innerHTML = wl.map(function(w){
-        var meta = [sportLabel(w.sport), w.distance_m ? fmtFloat(w.distance_m/1000,2)+" km" : "", w.duration_s ? Math.round(w.duration_s/60)+" 分钟" : "", w.avg_hr ? "心率 "+fmtNum(w.avg_hr) : ""].filter(Boolean).join(" · ");
-        return '<div class="workout-row"><div style="display:flex;justify-content:space-between;gap:10px"><span style="font-weight:600">' + esc(sportLabel(w.sport)) + '</span><span class="muted" style="font-size:12px">' + esc((w.start_time||w.date||"").slice(0,16).replace("T"," ")) + '</span></div><div class="muted" style="font-size:12px;margin-top:2px">' + esc(meta) + '</div></div>';
+        var meta = [w.duration_s ? Math.round(w.duration_s/60)+" 分钟" : "", w.distance_m ? fmtFloat(w.distance_m/1000,2)+" km" : "", w.avg_hr ? fmtNum(w.avg_hr)+" bpm" : ""].filter(Boolean).join(" · ");
+        var stamp = w.start_time || w.date || "";
+        return '<div class="workout-row"><div class="workout-icon">' + icon +
+          '</div><div class="workout-info"><strong>' + esc(sportLabel(w.sport)) + '</strong><small>' + esc(meta) +
+          '</small></div><time datetime="' + esc(stamp) + '">' + esc(stamp.slice(0,16).replace("T"," ")) + '</time></div>';
       }).join("");
     }
 
     var sync = data.sync || {};
-    if(sync.state === "running"){ setStatus(false, "同步中"); }
-    else if(s.expired){ setStatus(false, "需要重新登录"); }
-    else if(s.last_sync_at){ var age = (Date.now()-new Date(s.last_sync_at).getTime())/3600000; setStatus(age < 36, "同步于 " + rel(s.last_sync_at)); }
-    else { setStatus(false, "尚未同步"); }
-    $("#sideVer").textContent = "v" + (data.version || "");
-
+    if(sync.state === "running"){ setStatus("warn", "同步中"); }
+    else if(s.expired){ setStatus("bad", "需要重新登录"); }
+    else if(s.last_sync_at){
+      var age = (Date.now() - new Date(s.last_sync_at).getTime()) / 3600000;
+      setStatus(age < 36 ? "" : "warn", rel(s.last_sync_at) + "同步");
+    }
+    else { setStatus("warn", "尚未同步"); }
     if(state.page === "sync"){ renderSync(data); }
     if(state.page === "xiaomi"){ renderXiaomi(data); }
   }
@@ -699,11 +643,11 @@ ADMIN_HTML = r'''<!doctype html>
     if(sync.state === "done"){
       var r = sync.result || {};
       var errs = (r.errors && r.errors.length) || 0;
-      resultEl.innerHTML = '<span style="color:' + (errs ? "#fbbf24" : "#34d399") + '">' + (errs ? "完成，但有 " + errs + " 个错误" : "同步完成") + '</span>' +
+      resultEl.innerHTML = '<span class="' + (errs ? "warn" : "ok") + '">' + (errs ? "完成，但有 " + errs + " 个错误" : "同步完成") + '</span>' +
         ' · 范围 ' + esc(r.from || "") + ' ~ ' + esc(r.to || "") + ' · ' + fmtNum(r.days) + ' 天 · ' + fmtNum(r.chunks) + ' 个分块';
       if(errs){ resultEl.innerHTML += '<div class="err" style="margin-top:4px;font-size:11.5px">' + esc((r.errors || []).slice(0, 3).join("；")) + '</div>'; }
     } else if(sync.state === "error"){
-      resultEl.innerHTML = '<span style="color:#f87171">同步失败：' + esc(sync.error || "") + '</span>';
+      resultEl.innerHTML = '<span class="err">同步失败：' + esc(sync.error || "") + '</span>';
     } else {
       resultEl.textContent = "";
     }
@@ -733,7 +677,7 @@ ADMIN_HTML = r'''<!doctype html>
 
   function renderXiaomi(data){
     var s = data.session;
-    $("#xmSession").innerHTML = s.expired ? '<span style="color:#f87171">已失效，需要重新登录</span>' : '<span style="color:#34d399">正常</span>';
+    $("#xmSession").innerHTML = s.expired ? '<span class="err">已失效，需要重新登录</span>' : '<span class="ok">正常</span>';
     $("#xmLastSync").textContent = s.last_sync_at ? (rel(s.last_sync_at) + "（" + new Date(s.last_sync_at).toLocaleString() + "）") : "从未";
     $("#xmRange").textContent = (s.first_date || "—") + " ~ " + (s.last_date || "—");
     $("#xmRows").textContent = fmtNum(s.daily_rows) + " 天数据 / " + fmtNum(s.workout_rows) + " 条运动";
@@ -774,6 +718,104 @@ ADMIN_HTML = r'''<!doctype html>
       }).join("") + "</tr>";
     });
     el.innerHTML = html + "</tbody></table>";
+  }
+
+  /* ---------------- sleep page ---------------- */
+  function sleepMinutes(v){
+    if(v == null){ return "—"; }
+    var minutes = Math.round(v);
+    if(minutes < 60){ return minutes + " 分钟"; }
+    var remainder = minutes % 60;
+    return Math.floor(minutes / 60) + " 小时" + (remainder ? " " + remainder + " 分" : "");
+  }
+  function durationStat(value){
+    if(value == null){ return "—"; }
+    var minutes = Math.round(value);
+    if(minutes < 60){ return minutes + '<small>分钟</small>'; }
+    var remainder = minutes % 60;
+    return Math.floor(minutes / 60) + '<small>小时</small>' + (remainder ? remainder + '<small>分</small>' : "");
+  }
+  function sleepTime(session){
+    if(!session || !session.start || !session.end){ return "—"; }
+    var startDay = session.start.slice(0, 10), endDay = session.end.slice(0, 10);
+    var awake = session.end.slice(11, 16), asleep = session.start.slice(11, 16);
+    if(startDay !== endDay){ asleep = startDay.slice(5) + " " + asleep; }
+    return asleep + " – " + awake;
+  }
+  function sleepDurationChart(data){
+    var byDate = new Map(data.days.map(function(row){ return [row.date, row]; }));
+    var max = sleepAxisMax(Math.max(...data.days.map(function(row){
+      return Math.max(row.main?.asleep_min || 0, row.nap_min || 0);
+    })));
+    var slot = PLOT_WIDTH / data.dates.length;
+    var bars = data.dates.map(function(day, i){
+      var row = byDate.get(day);
+      if(!row){ return ""; }
+      return [[row.main?.asleep_min, "主睡眠", "main-sleep"], [row.nap_min, "小睡", "nap"]].map(function(bar, j){
+        var minutes = bar[0];
+        if(!minutes){ return ""; }
+        var h = minutes / max * PLOT_HEIGHT;
+        return chartBar(slot * (i + 0.14 + j * 0.37), PLOT_HEIGHT - h, slot * 0.35, h, bar[2],
+          day + " · " + bar[1] + " " + sleepMinutes(minutes), 1.2);
+      }).join("");
+    }).join("");
+    return bars ? chartFrame(data.dates, "每日主睡眠和小睡时长", bars, 0, max, function(v){ return v / 60; })
+      : chartEmpty("暂无可绘制的睡眠分段");
+  }
+  function renderSleep(data){
+    $("#sleepPeriod").textContent = data.from + " 至 " + data.to;
+    $("#sleepStatus").textContent = data.days.length ? "" : "这段时间没有已同步的睡眠记录";
+    $("#sleepResults").classList.toggle("hidden", !data.days.length);
+    if(!data.days.length){ return; }
+
+    var mainDays = data.days.filter(function(row){ return row.main; });
+    var mainTotal = mainDays.reduce(function(total, row){ return total + row.main.asleep_min; }, 0);
+    var napDays = data.days.filter(function(row){ return row.nap_min != null; });
+    var naps = data.days.slice().reverse().flatMap(function(row){
+      return row.naps.map(function(nap){ return {date:row.date, time:sleepTime(nap), minutes:nap.asleep_min}; });
+    });
+    var napTotal = naps.reduce(function(total, nap){ return total + nap.minutes; }, 0);
+    var combined = data.days.reduce(function(total, row){ return total + row.total_min; }, 0);
+    $("#sleepMainTotal").innerHTML = durationStat(mainDays.length ? mainTotal : null);
+    $("#sleepMainMeta").textContent = mainDays.length ? (mainDays.length + " 天有主睡眠 · 平均 " + sleepMinutes(mainTotal / mainDays.length)) : "暂无已识别的主睡眠";
+    $("#sleepNapTotal").innerHTML = durationStat(napDays.length ? napTotal : null);
+    $("#sleepNapMeta").textContent = napDays.length ? (naps.length + " 次已识别的小睡") : "暂无可区分的小睡分段";
+    $("#sleepCombinedTotal").innerHTML = durationStat(combined);
+    $("#sleepDurationChart").innerHTML = sleepDurationChart(data);
+
+    var daily = data.days.slice().reverse().map(function(row){
+      return {date:row.date, main:row.main?.asleep_min, time:sleepTime(row.main), nap:row.nap_min,
+        total:row.total_min, other:row.other.length ? row.other.reduce(function(total, session){ return total + session.asleep_min; }, 0) : null};
+    });
+    var columns = [{key:"date", label:"日期"}, {key:"main", label:"主睡眠", raw:true, fmt:function(v, row){
+      return v == null ? "—" : esc(sleepMinutes(v)) + '<small class="sleep-main-time">' + esc(row.time) + '</small>';
+    }}, {key:"nap", label:"小睡", fmt:sleepMinutes}];
+    if(daily.some(function(row){ return row.other != null; })){
+      columns.push({key:"other", label:"其他睡眠分段", fmt:sleepMinutes});
+    }
+    columns.push({key:"total", label:"含小睡合计", fmt:sleepMinutes});
+    renderTable($("#sleepDailyTable"), daily, columns);
+    renderTable($("#sleepNapTable"), naps, [{key:"date", label:"日期"}, {key:"time", label:"时段"},
+      {key:"minutes", label:"时长", fmt:sleepMinutes}], "这段时间没有已识别的小睡");
+    var missing = data.days.filter(function(row){ return row.detail_status === "missing"; }).length;
+    var partial = data.days.filter(function(row){ return row.detail_status === "partial"; }).length;
+    $("#sleepCombinedMeta").textContent = "小米按天汇总" + (missing ? (" · 含 " + missing + " 天未拆分记录") : "");
+    var notes = ["主睡眠取当天有分期的最长一段，小睡取无分期且少于 3 小时的分段。"];
+    if(missing){ notes.push(missing + " 天只有小米汇总，暂无分段。"); }
+    if(partial){ notes.push(partial + " 天的分段时长与小米合计存在差异。"); }
+    $("#sleepCoverage").textContent = notes.join(" ");
+  }
+  async function loadSleep(){
+    var request = ++state.sleepRequest;
+    $("#sleepPeriod").textContent = "";
+    $("#sleepStatus").textContent = "正在加载睡眠记录…";
+    $("#sleepResults").classList.add("hidden");
+    try {
+      var data = await api("/sleep?days=" + state.sleepDays);
+      if(request === state.sleepRequest){ renderSleep(data); }
+    } catch(e){
+      if(request === state.sleepRequest){ $("#sleepStatus").textContent = "睡眠记录加载失败，可点击刷新重试。"; }
+    }
   }
 
   /* ---------------- data page ---------------- */
@@ -831,14 +873,18 @@ ADMIN_HTML = r'''<!doctype html>
   function setDataRange(days){
     $("#dataFrom").value = daysAgo(days - 1);
     $("#dataTo").value = today();
-    $$("#dataRangeSeg button").forEach(function(b){ b.classList.toggle("active", Number(b.dataset.range) === days); });
+    $$("#dataRangeSeg button").forEach(function(b){
+      var active = Number(b.dataset.range) === days;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
     loadData();
   }
   var ALL_COLUMNS = ["date","steps","distance_m","sleep_total_min","sleep_deep_min","sleep_rem_min","hr_resting","hr_avg","spo2_avg","stress_avg","weight_kg","active_kcal"];
   var COLUMN_LABELS = {
     steps:"步数", distance_m:"距离(m)", step_calories:"步行千卡", active_kcal:"活动千卡", resting_kcal:"静息千卡",
     intake_kcal:"摄入千卡", total_kcal:"总千卡", hr_avg:"平均心率", hr_min:"最低心率", hr_max:"最高心率", hr_resting:"静息心率",
-    sleep_total_min:"睡眠", sleep_deep_min:"深睡", sleep_light_min:"浅睡", sleep_rem_min:"REM", sleep_awake_min:"清醒",
+    sleep_total_min:"睡眠合计（含小睡）", sleep_deep_min:"深睡", sleep_light_min:"浅睡", sleep_rem_min:"REM", sleep_awake_min:"清醒",
     sleep_start:"入睡", sleep_end:"起床", spo2_avg:"血氧均值", spo2_min:"血氧最低", spo2_max:"血氧最高",
     stress_avg:"压力均值", stress_max:"压力最高", stress_relaxed_min:"放松", stress_mild_min:"轻度",
     stress_moderate_min:"中度", stress_severe_min:"重度", activity_count:"活动次数", activity_min:"活动分钟",
@@ -999,31 +1045,75 @@ ADMIN_HTML = r'''<!doctype html>
 
   /* ---------------- routing ---------------- */
   function setActiveNav(page){
-    $$("nav a").forEach(function(a){ a.classList.toggle("active", a.dataset.nav === page); });
+    $$(".site-nav a").forEach(function(a){
+      var active = a.dataset.nav === page;
+      a.classList.toggle("active", active);
+      if(active){ a.setAttribute("aria-current", "page"); }
+      else { a.removeAttribute("aria-current"); }
+    });
+    $("#navMore").classList.toggle("active", !$(".nav-primary a.active"));
+  }
+  function closeMobileMenu(restoreFocus){
+    var toggle = $("#navMore");
+    if(toggle.getAttribute("aria-expanded") !== "true"){ return; }
+    toggle.setAttribute("aria-expanded", "false");
+    if(restoreFocus){ toggle.focus({preventScroll:true}); }
+  }
+  function bindMobileMenu(){
+    var toggle = $("#navMore"), tools = $("#navTools");
+    toggle.onclick = function(){
+      toggle.setAttribute("aria-expanded", String(toggle.getAttribute("aria-expanded") !== "true"));
+    };
+    document.addEventListener("click", function(e){
+      if(!toggle.contains(e.target) && !tools.contains(e.target)){ closeMobileMenu(); }
+    });
+    tools.addEventListener("click", function(e){
+      if(e.target.closest("a")){ closeMobileMenu(true); }
+    });
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape"){ closeMobileMenu(true); }
+    });
+    window.matchMedia("(max-width: 740px)").addEventListener("change", function(e){
+      if(!e.matches){ closeMobileMenu(); }
+    });
   }
   function route(){
+    closeMobileMenu();
     var raw = location.hash.replace(/^#\//, "");
-    var page = PAGE_META[raw] ? raw : "overview";
+    var page = Object.hasOwn(PAGE_META, raw) ? raw : "overview";
+    if(page !== state.page){ window.scrollTo(0, 0); }
     state.page = page;
     $$(".page").forEach(function(p){ p.classList.add("hidden"); });
     var el = $("#page-" + page); if(el){ el.classList.remove("hidden"); }
     $("#pageTitle").textContent = PAGE_META[page][0];
     $("#pageCrumb").textContent = PAGE_META[page][1];
+    $(".page-heading").dataset.page = page;
     setActiveNav(page);
+    if(page === "sleep"){ loadSleep(); }
     if(page === "data"){ initDataPage(); }
     if(page === "backups"){ loadBackups(); }
     if(page === "settings"){ loadSettings(); }
     if(page === "sync"){ loadSchedule(); }
-    if(page === "sync" || page === "xiaomi" || page === "overview"){ loadOverview(); }
+    loadOverview(page !== "overview" && page !== "sync" && page !== "xiaomi");
   }
 
   /* ---------------- boot ---------------- */
+  function refreshPage(){
+    closeMobileMenu(true);
+    if(state.page === "data"){ loadData(); loadOverview(true); }
+    else { route(); }
+  }
+  async function logout(){
+    closeMobileMenu(true);
+    try{ await api("/logout", {method:"POST", body:{}}); }catch(e){}
+    location.reload();
+  }
   function bind(){
-    $("#btnLogin").onclick = login;
-    $("#password").addEventListener("keydown", function(e){ if(e.key === "Enter"){ login(); } });
-    $("#btnLogout").onclick = async function(){ try{ await api("/logout", {method:"POST", body:{}}); }catch(e){}; location.reload(); };
-    $("#btnRefresh").onclick = function(){ loadOverview(); route(); };
-    $("#btnLoadData").onclick = loadData;
+    bindMobileMenu();
+    $("#loginForm").onsubmit = function(e){ e.preventDefault(); login(); };
+    $$('[data-admin-action="logout"]').forEach(function(button){ button.onclick = logout; });
+    $$('[data-admin-action="refresh"]').forEach(function(button){ button.onclick = refreshPage; });
+    $("#dataFilters").onsubmit = function(e){ e.preventDefault(); loadData(); };
     $("#btnExport").onclick = function(){
       var domain = $("#dataDomain").value, from = $("#dataFrom").value, to = $("#dataTo").value;
       window.location = "/admin/api/export.csv?domain=" + encodeURIComponent(domain) + "&start=" + from + "&end=" + to;
@@ -1032,6 +1122,17 @@ ADMIN_HTML = r'''<!doctype html>
     $("#schedMode").onchange = toggleSchedule;
     $("#btnSaveSchedule").onclick = saveSchedule;
     $$("#dataRangeSeg button").forEach(function(b){ b.onclick = function(){ setDataRange(Number(b.dataset.range)); }; });
+    $$("#sleepRange button").forEach(function(b){
+      b.onclick = function(){
+        state.sleepDays = Number(b.dataset.days);
+        $$("#sleepRange button").forEach(function(button){
+          var active = button === b;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        loadSleep();
+      };
+    });
     $("#btnXiaomiLogin").onclick = startXiaomiLogin;
     $("#btnXiaomiReset").onclick = resetXiaomiLogin;
     $("#btnBackup").onclick = createBackup;
@@ -1056,10 +1157,13 @@ ADMIN_HTML = r'''<!doctype html>
 
   async function login(){
     $("#loginError").textContent = "";
+    $("#btnLogin").disabled = true;
     try{
       await api("/session", {method:"POST", body:{password: $("#password").value}});
-      showApp(); route(); loadOverview(); startPolling();
+      $("#password").value = "";
+      showApp(); route(); startPolling();
     } catch(e){ $("#loginError").textContent = e.message; }
+    finally { $("#btnLogin").disabled = false; }
   }
 
   var pollTimer = null;

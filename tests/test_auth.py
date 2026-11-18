@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from base64 import b64encode
+
 from fastapi.testclient import TestClient
 
 from health_bridge.api import create_rest_app
@@ -22,10 +24,15 @@ def test_openapi_is_public(rest_app):
 
 def test_favicon_is_public(rest_app):
     with TestClient(rest_app) as client:
+        png = client.get("/favicon.png")
         svg = client.get("/favicon.svg")
         icon = client.get("/favicon.ico", follow_redirects=False)
+    assert png.status_code == 200
+    assert png.headers["content-type"] == "image/png"
+    assert png.content.startswith(b"\x89PNG\r\n\x1a\n")
     assert svg.status_code == 200
     assert "svg" in svg.headers["content-type"]
+    assert b64encode(png.content) in svg.content
     assert icon.status_code in (302, 307)
     assert icon.headers["location"] == "/favicon.svg"
 

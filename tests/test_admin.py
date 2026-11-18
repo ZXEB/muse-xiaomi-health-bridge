@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import timedelta
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+
+from tests.conftest import TOKEN, FakeClient
 
 CSRF = {"X-Requested-With": "XMLHttpRequest"}
 
@@ -49,6 +53,44 @@ def test_admin_login_and_overview(rest_app):
         assert session.json()["authenticated"] is True
         audit = client.get("/admin/api/audit").json()["entries"]
         assert any(entry["action"] == "login.ok" for entry in audit)
+
+
+def test_admin_sleep_separates_main_sleep_and_naps(service, rest_app, monkeypatch):
+    today = service.today()
+    day = today.isoformat()
+    nap_day = (today - timedelta(days=1)).isoformat()
+    legacy_day = (today - timedelta(days=2)).isoformat()
+    record = FakeClient().sleep(day, day).records[0]
+    main = record.sessions[0]
+    nap = replace(
+        main, start_epoch_s=main.end_epoch_s + 3600, end_epoch_s=main.end_epoch_s + 5400,
+        asleep_min=25, deep_min=None, light_min=None, rem_min=None, awake_min=None,
+    )
+    monkeypatch.setattr(FakeClient, "sleep", lambda *_: SimpleNamespace(records=[
+        replace(record, asleep_min=355, sessions=[nap, main, nap]),
+        replace(record, date=nap_day, asleep_min=25, sessions=[nap]),
+    ]))
+    service.db.upsert_daily([{"date": legacy_day, "sleep_total_min": 400}])
+    service.db.upsert_daily(service.source.sleep(nap_day, day))
+    service.db.upsert_daily([{"date": day, "steps": 6000}])
+
+    with TestClient(rest_app) as client:
+        assert client.get("/admin/api/sleep?days=7").status_code == 401
+        _login(client)
+        payload = client.get("/admin/api/sleep?days=7").json()
+        overview = client.get("/admin/api/overview").json()
+        legacy = client.get(f"/v1/sleep?from={day}&to={day}", headers={"Authorization": f"Bearer {TOKEN}"}).json()
+
+    assert len(payload["dates"]) == 7
+    unsplit, nap_only, split = payload["days"]
+    assert unsplit["detail_status"] == "missing" and unsplit["total_min"] == 400
+    assert unsplit["main"] is None and unsplit["nap_min"] is None
+    assert nap_only["main"] is None and nap_only["nap_min"] == 25
+    assert split["main"]["asleep_min"] == 330 and split["main"]["deep_min"] == 70
+    assert len(split["naps"]) == 1 and split["nap_min"] == 25
+    assert split["total_min"] == 355 and split["detail_status"] == "complete"
+    assert overview["sleep"]["days"][-1] == split
+    assert legacy["rows"][0]["sleep_total_min"] == 355
 
 
 def test_token_endpoint(rest_app):

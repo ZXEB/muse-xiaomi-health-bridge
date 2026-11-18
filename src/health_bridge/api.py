@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from base64 import b64encode
+from pathlib import Path
+
 from fastapi import FastAPI, Query
-from fastapi.responses import PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 
 from . import __version__
 from .admin import create_admin_router
 from .security import RateLimiter, RateLimitMiddleware, TokenAuthMiddleware
 from .service import HealthService
 from .source import AuthExpiredError, UpstreamError
+
+ICON_PATH = Path(__file__).with_name("assets") / "health-bridge-icon.png"
+ICON_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 
 DESCRIPTION = """
 Read-only bridge between Xiaomi Mi Fitness (小米运动健康) and Meta Muse.
@@ -58,18 +64,20 @@ def create_rest_app(service: HealthService, token: str | None = None):
     def healthz():
         return {"ok": True}
 
+    @app.get("/favicon.png", include_in_schema=False)
+    def favicon_png():
+        return FileResponse(ICON_PATH, media_type="image/png", headers=ICON_CACHE_HEADERS)
+
     @app.get("/favicon.svg", include_in_schema=False)
-    def favicon():
+    def favicon_svg():
+        icon = b64encode(ICON_PATH.read_bytes()).decode("ascii")
         return Response(
             content=(
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
-                '<rect width="48" height="48" rx="12" fill="#1b2740"/>'
-                '<path d="M14 30V20l6 6 4-9 4 9 6-6v10" fill="none" stroke="#4f8cff" '
-                'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
-                '<circle cx="31" cy="17" r="2.4" fill="#34d399"/></svg>'
+                f'<image width="48" height="48" href="data:image/png;base64,{icon}"/></svg>'
             ),
             media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=86400"},
+            headers=ICON_CACHE_HEADERS,
         )
 
     @app.get("/favicon.ico", include_in_schema=False)

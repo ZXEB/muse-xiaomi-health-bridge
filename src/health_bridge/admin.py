@@ -453,6 +453,7 @@ def _overview(service: HealthService, login_manager: XiaomiLoginManager, sync_ma
         },
         "summary": summary,
         "timeline": timeline,
+        "sleep": service.sleep_days(30),
         "recent_workouts": recent[-5:][::-1],
         "login": login_manager.state(),
         "sync": sync_manager.state(),
@@ -617,6 +618,11 @@ def create_admin_router(service: HealthService) -> APIRouter:
     def summary(request: Request, days: int = 7):
         require(request)
         return service.summary(days)
+
+    @router.get("/api/sleep")
+    def sleep_days(request: Request, days: int = 30):
+        require(request)
+        return service.sleep_days(days)
 
     # -- data ----------------------------------------------------------
     @router.get("/api/metrics")
