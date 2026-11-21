@@ -134,6 +134,12 @@ class HealthService:
         rows = self.db.metrics_between(start_date.isoformat(), end_date.isoformat())
         fields = DOMAIN_FIELDS[name]
         rows = [{k: row.get(k) for k in fields} for row in rows]
+        if name == "sleep":
+            details = {r["date"]: describe_sleep_day(r["date"], r["total_min"], r["sessions"])
+                       for r in self.db.sleep_between(start_date.isoformat(), end_date.isoformat())}
+            for row in rows:
+                row["sleep_details"] = details.get(row["date"])
+            notes.append("sleep_total_min is the daily total including naps; sleep_details separates sessions when available.")
         rows = self._cap(rows, notes)
         return {
             "timezone": self.settings.tz,
@@ -175,6 +181,10 @@ class HealthService:
         start_date = end_date - timedelta(days=days - 1)
         metrics = self.db.metrics_between(start_date.isoformat(), end_date.isoformat())
         workouts = self.db.workouts_between(start_date.isoformat(), end_date.isoformat())
+        details = {r["date"]: describe_sleep_day(r["date"], r["total_min"], r["sessions"])
+                   for r in self.db.sleep_between(start_date.isoformat(), end_date.isoformat())}
+        for row in metrics:
+            row["sleep_details"] = details.get(row["date"])
         result = build_summary(metrics, workouts, start_date, end_date, self.settings.tz)
         result["markdown"] = to_markdown(result)
         if not metrics:

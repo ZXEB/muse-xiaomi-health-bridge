@@ -59,6 +59,7 @@ def build_summary(
         "sleep_latest": (
             {
                 "date": latest_sleep["date"],
+                "sleep_details": latest_sleep.get("sleep_details"),
                 "asleep_min": latest_sleep["sleep_total_min"],
                 "start": latest_sleep.get("sleep_start"),
                 "end": latest_sleep.get("sleep_end"),
@@ -120,9 +121,17 @@ def to_markdown(summary: dict[str, Any]) -> str:
         latest = o.get("sleep_latest")
         if latest:
             parts.append(
-                f"最近一晚 {latest['date']} 睡 {_fmt_min(latest['asleep_min'])}"
+                f"最近一天 {latest['date']} 睡眠合计 {_fmt_min(latest['asleep_min'])}"
                 + (f"（{latest['start']} → {latest['end']}）" if latest.get("start") else "")
             )
+            detail = latest.get("sleep_details")
+            if detail:
+                if detail["main"]:
+                    parts.append(f"主睡眠 {_fmt_min(detail['main']['asleep_min'])}")
+                if detail["nap_min"] is not None:
+                    parts.append(f"小睡 {_fmt_min(detail['nap_min'])}（{len(detail['naps'])} 次）")
+                if detail["detail_status"] != "complete":
+                    parts.append("睡眠明细不完整")
         lines.append("- 睡眠：" + "；".join(parts))
     if o["resting_hr_avg"] is not None:
         lines.append(
@@ -143,7 +152,7 @@ def to_markdown(summary: dict[str, Any]) -> str:
         )
 
     if summary["daily"]:
-        lines += ["", "## 每日", "| 日期 | 步数 | 睡眠 | 静息心率 | 血氧 | 压力 |", "| --- | --- | --- | --- | --- | --- |"]
+        lines += ["", "## 每日", "| 日期 | 步数 | 睡眠合计（含小睡） | 静息心率 | 血氧 | 压力 |", "| --- | --- | --- | --- | --- | --- |"]
         for row in summary["daily"]:
             d = date.fromisoformat(row["date"])
             label = f"{row['date']} {WEEKDAYS[d.weekday()]}"

@@ -19,6 +19,8 @@ If the user asks to refresh, update, pull or "同步/刷新" the latest data, ca
 sync_now: it pulls from the Xiaomi cloud into the local mirror (5-30 seconds)
 and never writes to the Xiaomi account. After sync_now returns, read the fresh
 values again with get_daily_summary or the per-domain tools.
+For sleep, call get_sleep: daily totals include naps, and sleep_details separates
+sessions. Missing or partial details must not be interpreted as no naps.
 
 The data comes from the Xiaomi cloud and can lag until the phone's Mi Fitness
 app syncs; the "notes" field says when something is missing or partial.
@@ -80,7 +82,7 @@ def create_mcp_app(service: HealthService, token: str | None = None):
         return _wrap(service.metrics)(start, end, fields)
 
     @mcp.tool(
-        description="Sleep per day: total, deep, light, REM, awake minutes, start/end.",
+        description="Sleep per day: daily total includes naps; sleep_details separates main sleep, naps and other sessions and indicates completeness. Use this for sleep questions.",
         annotations=READ_ONLY,
     )
     def get_sleep(start: str | None = None, end: str | None = None) -> dict:

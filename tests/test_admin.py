@@ -91,6 +91,10 @@ def test_admin_sleep_separates_main_sleep_and_naps(service, rest_app, monkeypatc
     assert split["total_min"] == 355 and split["detail_status"] == "complete"
     assert overview["sleep"]["days"][-1] == split
     assert legacy["rows"][0]["sleep_total_min"] == 355
+    assert legacy["rows"][0]["sleep_details"] == split
+    summary = service.summary(7)
+    assert summary["overview"]["sleep_latest"]["sleep_details"] == split
+    assert "小睡 0h25m" in summary["markdown"]
 
 
 def test_token_endpoint(rest_app):
