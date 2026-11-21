@@ -517,7 +517,7 @@ def create_admin_router(service: HealthService) -> APIRouter:
     @router.get("", response_class=HTMLResponse)
     @router.get("/", response_class=HTMLResponse)
     def admin_page() -> HTMLResponse:
-        return HTMLResponse(ADMIN_HTML)
+        return HTMLResponse(ADMIN_HTML, headers={"Cache-Control": "no-store"})
 
     # -- session -------------------------------------------------------
     @router.post("/api/session")
